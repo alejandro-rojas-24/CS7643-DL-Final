@@ -3,6 +3,8 @@ import pytest
 from fastapi.testclient import TestClient
 from src.app.main import app
 
+client = TestClient(app)
+
 
 def test_health_endpoint():
     response = client.get("/health")
@@ -67,4 +69,3 @@ def test_ask_endpoint_download_failure(mock_client):
     mock_client.pull.assert_called_once_with(model="unknown_model")
 
 
-client = TestClient(app)
