@@ -1,0 +1,33 @@
+{% extends "base_prompt.j2" %}
+
+{% block specific_instructions %}
+{% if examples %}
+Here are some examples of similar problems and their solutions:
+--- START EXAMPLES ---
+{% for example in examples %}
+Query: {{ example.query }}
+Reasoning: {{ example.reasoning }}
+Answer JSON:
+{{ example.answer_json | indent(2) }}
+---
+{% endfor %}
+--- END EXAMPLES ---
+{% endif %}
+
+Now, consider the current problem with the ground defined by the function: {{ ground_description }}
+
+Provide your reasoning process step-by-step and then the final JSON output containing the calculated `h` and `v`.
+The JSON object MUST contain the keys "height", "horizontal_velocity", AND "reasoning" (string).
+
+Example JSON format:
+{
+  "reasoning": "First, I estimated the approximate time of flight needed... Then I considered the effect of the slope... Finally, I adjusted the initial velocity...",
+  "height": 12.3,
+  "horizontal_velocity": 45.6
+}
+
+Current Problem Query:
+Find h and v for the {{ target_bounce_number | ordinal }} bounce to land near {{ target_distance }}m on ground: {{ ground_description }}.
+
+Your Response (JSON only):
+{% endblock %}

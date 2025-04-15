@@ -1,0 +1,34 @@
+{% extends "base_prompt.j2" %}
+
+{% block specific_instructions %}
+{% if examples %}
+Here are some examples of successful past attempts on similar problems:
+--- START EXAMPLES ---
+{% for example in examples %}
+Query: {{ example.query }}
+{% for step in example.history %}
+{% if step.type == 'reasoning' %}Initial Reasoning: {{ step.text }}{% elif step.type == 'simulation' %}Simulation Result: {{ step.bounce_locs }} (Target: {{ example.target }}){% elif step.type == 'critique' %}Critique: {{ step.text }}{% endif %}
+{% endfor %}
+Final Answer JSON:
+{{ example.final_answer_json | indent(2) }}
+---
+{% endfor %}
+--- END EXAMPLES ---
+{% endif %}
+
+Current Problem:
+Ground function: {{ ground_description }}
+Target: {{ target_bounce_number | ordinal }} bounce near {{ target_distance }}m.
+
+Task: Provide your initial reasoning about how to approach this problem and your first estimate for `h` and `v`.
+Output ONLY the JSON object containing "reasoning" (string), "height" (float), and "horizontal_velocity" (float).
+
+Example JSON format:
+{
+  "reasoning": "The ground is flat, so bounces should be somewhat regular. For 50m on the 3rd bounce, each bounce covers ~17m. Estimating time... gives a starting point for v. Need sufficient height h.",
+  "height": 15.0,
+  "horizontal_velocity": 30.0
+}
+
+Your Response (JSON only):
+{% endblock %}
