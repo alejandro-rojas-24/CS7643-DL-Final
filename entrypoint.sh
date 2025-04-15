@@ -8,10 +8,10 @@ pid=$!
 # Pause for Ollama to start.
 sleep 5
 
-# Pull down model
-echo "Retrieving model..."
-ollama pull llama3.2:1b
-echo "Model retrieved."
+model="llama2"
+echo "Retrieving model $model..."
+ollama pull "$model"
+echo "$model retrieved."
 
 # Wait for Ollama process to finish.
 wait $pid
