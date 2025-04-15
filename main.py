@@ -3,7 +3,7 @@ import json
 import config 
 from simlm.runner import SimLMRunner
 from simlm.projectiles import ProjectileSimulator
-from simlm.grounds import flat_ground, sine_ground, interpolated_ground
+from simlm.ground import flat_ground, sine_ground, interpolated_ground
 import numpy as np 
 
 def save_results(results, filename="results/experiment_results.jsonl"):
