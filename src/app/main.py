@@ -2,10 +2,13 @@ import logging
 import os
 
 from fastapi import FastAPI, Query
-from .models import AskResponse, HealthResponse
+from google import genai
+from google.genai.types import GenerateContentConfig
 
 import ollama
 from ollama._types import ResponseError
+
+from .models import AskResponse, HealthResponse
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +19,8 @@ app = FastAPI(
 )
 
 ollama_url = os.getenv("OLLAMA_API_URL", "http://ollama:11434")
-client = ollama.Client(host=ollama_url)
+ollama_client = ollama.Client(host=ollama_url)
+google_client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
 
 @app.get("/health")
@@ -32,16 +36,20 @@ def health() -> HealthResponse:
 
 
 @app.get("/models")
-def models():
+def models() -> dict:
     """
     List all available language models in the Ollama service.
 
     Returns:
         dict: Dictionary containing information about available models
     """
-    response = client.list()
+    google_models = google_client.models.list()
+    ollama_models = ollama_client.list()
+    response = {
+        "ollama": ollama_models,
+        "google": google_models,
+    }
     logger.info(f"Models endpoint called, found models: {response}")
-    # convert to ModelsResponse
     return response
 
 
@@ -61,7 +69,7 @@ def pull(
     Returns:
         dict: Response from the Ollama pull operation
     """
-    return client.pull(model=model)
+    return ollama_client.pull(model=model)
 
 
 @app.get("/ask", response_model=AskResponse)
@@ -71,7 +79,8 @@ def ask(
         description="The query to ask the model",
     ),
     model: str = Query(
-        default="llama2", description="The model to use for the query."
+        default="gemini-2.5-pro-exp-03-25",
+        description="The model to use for the query.",
     ),
 ) -> AskResponse:
     """
@@ -91,16 +100,34 @@ def ask(
     """
     logger.info(f"Ask endpoint called with model: {model} - Query: {query}")
 
+    messages = [
+        {"role": "system", "content": "You are a helpful assistant."},
+        {"role": "user", "content": query},
+    ]
+
+    if model.startswith("gemini"):
+        client = google_client
+        response = client.models.generate_content(
+            model="gemini-2.5-pro-exp-03-25",
+            contents=query,
+            config=GenerateContentConfig(
+                system_instruction=[
+                    "You are a helpful assistant.",
+                ]
+            ),
+        )
+        return AskResponse(answer=response.text)
+
     try:
         logger.info(f"Generating response using model: {model}")
-        response = client.generate(model=model, prompt=query)
+        response = ollama_client.chat(model=model, messages=messages)
     except ResponseError:
         logger.warning(f"Model {model} not found, attempting to download...")
         try:
-            client.pull(model=model)
+            ollama_client.pull(model=model)
             logger.info(f"Successfully downloaded model: {model}")
             # Retry generation after downloading
-            response = client.generate(model=model, prompt=query)
+            response = ollama_client.chat(model=model, messages=messages)
         except Exception as download_error:
             logger.exception(
                 f"Failed to download model {model}: {str(download_error)}"

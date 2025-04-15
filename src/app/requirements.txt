@@ -4,3 +4,4 @@ fastapi[standard]
 uvicorn
 pydantic
 pytest
+google-genai
