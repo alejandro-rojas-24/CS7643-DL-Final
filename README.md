@@ -23,19 +23,45 @@ To run the example simulation:
 python physics_sim/simple_projectile_example.py
 ```
 
-## Docker Usage
+## Ollama Docker Usage
 
-Build the docker image:
+First, ensure [Docker Desktop is installed](https://docs.docker.com/desktop/)
+and running.
 
-`docker build -t cs7643-dl-final .`
+Build the docker image from the docker directory:
+
+```bash
+cd docker
+docker build -t cs7643-dl-final .
+```
 
 Spin up the containers:
 
-`docker compose up -d`
+```bash
+docker compose up -d
+```
 
-Open `http://127.0.0.1:8080/docs` in your browser to view interactive API
-documentation.
+Open <http://localhost:11434/api/tags> in your browser to view downloaded models
+and confirm ollama is running.
 
-Stop the containers:
 
-`docker compose down`
+Running
+
+```bash
+python main.py
+```
+
+will automatically connect to the locally running server.
+
+
+To stop the containers:
+
+```bash
+docker compose down
+```
+
+## Analysis
+
+- Models
+- Experiments
+- Batching

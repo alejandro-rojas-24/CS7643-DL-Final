@@ -1,8 +1,8 @@
 services:
   ollama:
     build:
-      context: src/ollama
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: docker/Dockerfile
     ports:
       - 11434:11434
     volumes:
@@ -20,26 +20,6 @@ services:
     gpus: all
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
-      interval: 30s
-      timeout: 5s
-      retries: 2
-
-  app:
-    build:
-      context: src/app
-      dockerfile: Dockerfile
-    container_name: app
-    ports:
-      - 8080:8080
-    restart: unless-stopped
-    depends_on:
-      ollama:
-        condition: service_healthy
-    environment:
-      - OLLAMA_HOST=http://ollama:11434
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s
       timeout: 5s
       retries: 2

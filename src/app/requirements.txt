@@ -1,7 +1,0 @@
-requests
-ollama
-fastapi[standard]
-uvicorn
-pydantic
-pytest
-google-genai
