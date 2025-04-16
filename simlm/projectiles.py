@@ -8,6 +8,24 @@ import matplotlib.pyplot as plt
 import time
 from config import SIM_MAX_DURATION
 
+from abc import ABC, abstractmethod
+import pybullet as p
+import pybullet_data
+
+
+class BaseProjectileSimulator(ABC):
+    @abstractmethod
+    def add_ground(self, x_min, x_max, step_size, y_func):
+        pass
+
+    @abstractmethod
+    def add_projectile(self, initial_height, initial_velocity):
+        pass
+
+    @abstractmethod
+    def simulate(self, target_bounces, duration):
+        pass
+
 
 class ProjectileSimulator:
     def __init__(self, fps=1000, gravity_y=-9.81):
@@ -289,6 +307,7 @@ class AdvancedProjectileSimulator(ProjectileSimulator):
         if self.projectile_body:
             velocity = self.projectile_body.velocity
             speed = np.linalg.norm(velocity)  # magnitude of the velocity
+
             if speed > 0:
                 radius = self.projectile_body.shapes[0].radius
                 area = np.pi * (radius**2)
@@ -330,10 +349,9 @@ class AdvancedProjectileSimulator(ProjectileSimulator):
                     f"Debug: Reached target bounces ({target_bounces}) at step {step}."
                 )
                 break
+
             # Check for projectile leaving bounds or stopping
-            if (
-                self.projectile_body.position.y < -10
-            ):  # If it falls far below typical ground
+            if self.projectile_body.position.y < -10:
                 print(f"Debug: Projectile fell out of bounds at step {step}.")
                 break
 
@@ -344,3 +362,204 @@ class AdvancedProjectileSimulator(ProjectileSimulator):
         print(f"Debug: Final bounce locations: {self.bounce_locations}")
 
         return self.bounce_locations
+
+
+class PyBulletProjectileSimulator(BaseProjectileSimulator):
+    def __init__(
+        self,
+        gravity=(0, 0, -9.81),
+        timestep=1 / 1000.0,
+        gui=True,
+        drag_coefficient=0.47,
+        air_density=1.225,
+    ):
+        """
+        Initialize 3D projectile simulation environment using PyBullet.
+
+        Args:
+            gravity (tuple): 3D gravity vector (x, y, z) in m/s²
+            timestep (float): Physics simulation time step in seconds
+            gui (bool): Show visual simulation window if True
+            drag_coefficient (float): Aerodynamic drag coefficient (dimensionless)
+            air_density (float): Air density in kg/m³
+        """
+        super().__init__()
+        self.client = p.connect(p.GUI if gui else p.DIRECT)
+        p.setAdditionalSearchPath(pybullet_data.getDataPath())
+        p.setGravity(*gravity)
+        p.setTimeStep(timestep)
+
+        self.ground = None
+        self.projectile = None
+        self.trajectory = []
+        self.bounce_locations = []
+        self.drag_coeff = drag_coefficient
+        self.air_density = air_density
+        self.in_contact = False
+        print(
+            f"Debug: Simulator initialized | Gravity: {gravity} | Timestep: {timestep}"
+        )
+
+    def add_ground(self, terrain_func=None):
+        """
+        Add ground plane to simulation.
+
+        Args:
+            terrain_func (function): Optional heightfield generator function
+        """
+        if terrain_func:
+            print("Debug: Custom terrain function detected.")
+        else:
+            self.ground = p.loadURDF("plane.urdf")
+            print("Debug: Flat ground plane added")
+
+    def add_projectile(
+        self,
+        initial_position=(0, 0, 0),
+        initial_velocity=(0, 0, 0),
+        mass=1,
+        radius=0.05,
+    ):
+        """
+        Create spherical projectile with specified initial conditions.
+
+        Args:
+            initial_position (tuple): 3D launch position (x, y, z) in meters
+            initial_velocity (tuple): 3D initial velocity vector (vx, vy, vz) in m/s
+            mass (float): Projectile mass in kg
+            radius (float): Projectile radius in meters
+
+        Returns:
+            int: PyBullet body ID of created projectile
+        """
+        if self.projectile:
+            p.removeBody(self.projectile)
+            print("Debug: Removed existing projectile")
+
+        col_id = p.createCollisionShape(p.GEOM_SPHERE, radius=radius)
+        vis_id = p.createVisualShape(
+            p.GEOM_SPHERE, radius=radius, rgbaColor=[1, 0, 0, 1]
+        )
+
+        self.projectile = p.createMultiBody(
+            baseMass=mass,
+            baseCollisionShapeIndex=col_id,
+            baseVisualShapeIndex=vis_id,
+            basePosition=initial_position,
+        )
+        p.resetBaseVelocity(self.projectile, initial_velocity)
+        print(
+            f"Debug: Projectile created | Position: {initial_position} | Velocity: {initial_velocity}"
+        )
+        return self.projectile
+
+    def simulate(self, target_bounces, duration=20):
+        """
+        Run physics simulation until target bounce count or duration reached.
+
+        Args:
+            target_bounces (int): Number of ground impacts to detect
+            duration (float): Maximum simulation time in seconds
+
+        Returns:
+            list: 3D positions of detected bounce locations
+        """
+        self.trajectory = []
+        self.bounce_locations = []
+
+        steps = int(duration / p.getPhysicsEngineParameters()["fixedTimeStep"])
+        start_time = time.time()
+
+        print(f"Debug: Simulation started | Target bounces: {target_bounces}")
+
+        if self.projectile:
+            pos, _ = p.getBasePositionAndOrientation(self.projectile)
+            vel, _ = p.getBaseVelocity(self.projectile)
+            print(f"Debug: Initial state | Position: {pos} | Velocity: {vel}")
+
+        for step in range(steps):
+            if self.projectile:
+                self._apply_drag()
+                pos, _ = p.getBasePositionAndOrientation(self.projectile)
+                self.trajectory.append(pos)
+
+                # Contact detection and handling
+                contacts = p.getContactPoints(self.projectile)
+                if contacts and not self.in_contact:
+                    self.bounce_locations.append(pos)
+                    print(f"Debug: Bounce detected | Step: {step} | Position: {pos}")
+                    self.in_contact = True
+                elif not contacts:
+                    self.in_contact = False
+
+                # Boundary check
+                if pos[2] < -10:
+                    print(f"Debug: Projectile out of bounds | Step: {step}")
+                    break
+
+                if len(self.bounce_locations) >= target_bounces:
+                    print(f"Debug: Target bounces reached | Step: {step}")
+                    break
+
+            p.stepSimulation()
+
+        end_time = time.time()
+        print(f"Debug: Simulation completed | Duration: {end_time-start_time:.2f}s")
+        p.disconnect()
+        return self.bounce_locations
+
+    def _apply_drag(self):
+        """Apply aerodynamic drag force using quadratic drag model."""
+        velocity, _ = p.getBaseVelocity(self.projectile)
+        speed = np.linalg.norm(velocity)
+
+        if speed > 0:
+            visual_data = p.getVisualShapeData(self.projectile)[0]
+            radius = visual_data[3][0]
+
+            area = np.pi * (radius**2)
+            drag_force = (
+                -0.5 * self.drag_coeff * self.air_density * area * speed * velocity
+            )
+            p.applyExternalForce(
+                self.projectile, -1, drag_force.tolist(), [0, 0, 0], p.WORLD_FRAME
+            )
+            print(f"Debug: Drag applied | Force: {np.linalg.norm(drag_force):.2f}N")
+
+    def get_trajectory(self):
+        """
+        Retrieve recorded projectile trajectory.
+
+        Returns:
+            ndarray: Nx3 array of (x, y, z) positions
+        """
+        return np.array(self.trajectory)
+
+    def plot_trajectory(self, title="3D Projectile Trajectory"):
+        """
+        Visualize trajectory and bounce locations in 3D.
+
+        Args:
+            title (str): Plot title text
+        """
+        traj = self.get_trajectory()
+        if len(traj) == 0:
+            print("Error: No trajectory data to plot")
+            return
+
+        fig = plt.figure(figsize=(12, 8))
+        ax = fig.add_subplot(111, projection="3d")
+        ax.plot(traj[:, 0], traj[:, 1], traj[:, 2], label="Trajectory")
+
+        if self.bounce_locations:
+            bounces = np.array(self.bounce_locations)
+            ax.scatter(
+                bounces[:, 0], bounces[:, 1], bounces[:, 2], c="r", label="Bounces"
+            )
+
+        ax.set_xlabel("X (m)")
+        ax.set_ylabel("Y (m)")
+        ax.set_zlabel("Z (m)")
+        ax.set_title(title)
+        ax.legend()
+        plt.show()

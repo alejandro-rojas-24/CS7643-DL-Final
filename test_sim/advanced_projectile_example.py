@@ -40,7 +40,11 @@
 # plt.title("Projectile Trajectory with Aerodynamic Drag")
 # plt.show()
 
-from projectiles import ProjectileSimulator, AdvancedProjectileSimulator
+from projectiles import (
+    ProjectileSimulator,
+    AdvancedProjectileSimulator,
+    PyBulletProjectile3D,
+)
 import numpy as np
 
 
@@ -73,3 +77,23 @@ positions = sim.simulate(duration=5)
 
 # plot trajectory
 sim.plot_trajectory(positions, ground_function, -1000, 1000, 10)
+
+# # init simulator
+# sim = PyBulletProjectile3D()
+# sim.add_ground(-1000, 1000, 10, ground_function)
+
+# # add projectile
+# projectile_body = sim.add_projectile((0, 100), (500, 400))
+
+# # simulate
+# positions = sim.simulate(duration=5)
+
+# # plot trajectory
+# sim.plot_trajectory(positions, ground_function, -1000, 1000, 10)
+
+# Launch at 45 degree angle with air resistance
+sim = PyBulletProjectile3D()
+velocity = [30, 0, 30]  # X,Y,Z components in m/s
+sim.add_projectile(position=[0, 0, 0], velocity=velocity)
+sim.simulate(10)
+sim.plot_trajectory_3d()

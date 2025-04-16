@@ -6,6 +6,8 @@
 import pymunk
 import numpy as np
 import matplotlib.pyplot as plt
+import pybullet as p
+import pybullet_data
 
 
 class ProjectileSimulator:
@@ -164,3 +166,122 @@ class AdvancedProjectileSimulator(ProjectileSimulator):
             )
 
         return positions
+
+
+class PyBulletProjectile3D:
+    def __init__(self, gravity=(0, 0, -9.81), timestep=1 / 1000.0):
+        """
+        Initialize the PyBullet physics environment with specified parameters.
+
+        Args:
+            gravity: 3D vector (x,y,z) for gravity in m/s² - default is Earth gravity in -Z direction
+            timestep: Physics simulation timestep in seconds - smaller values give more accurate physics
+        """
+
+        # Initialize in GUI mode, could possibly use p.DIRECT if not necessary
+        self.client = p.connect(p.GUI)
+
+        p.setAdditionalSearchPath(pybullet_data.getDataPath())
+        p.setGravity(*gravity)
+        p.setTimeStep(timestep)
+
+        # flat ground plane
+        self.ground = p.loadURDF("plane.urdf")
+        self.projectiles = []
+        self.trajectories = []
+
+    def add_projectile(self, position, velocity, mass=1, radius=0.05):
+        """
+        Create and add a spherical projectile to the simulation.
+
+        Args:
+            position: Initial 3D position (x,y,z) in meters
+            velocity: Initial 3D velocity (vx,vy,vz) in m/s
+            mass: Mass of the projectile in kg
+            radius: Radius of the projectile in meters
+
+        Returns:
+            The PyBullet body ID of the created projectile
+        """
+
+        col_id = p.createCollisionShape(p.GEOM_SPHERE, radius=radius)
+        vis_id = p.createVisualShape(
+            p.GEOM_SPHERE, radius=radius, rgbaColor=[1, 0, 0, 1]
+        )
+        projectile = p.createMultiBody(
+            baseMass=mass,
+            baseCollisionShapeIndex=col_id,
+            baseVisualShapeIndex=vis_id,
+            basePosition=position,
+        )
+        p.resetBaseVelocity(projectile, velocity)
+        self.projectiles.append(projectile)
+        self.trajectories.append([])
+
+        return projectile
+
+    def _apply_drag(self, body, drag_coeff=0.47, air_density=1.225):
+        """
+        Apply aerodynamic drag force to a projectile.
+
+        Args:
+            body: PyBullet body ID to apply drag to
+            drag_coeff: Drag coefficient (0.47 is typical for a sphere)
+            air_density: Air density in kg/m³ (1.225 is sea level standard)
+        """
+
+        velocity, _ = p.getBaseVelocity(body)
+        speed = np.linalg.norm(velocity)
+        if speed > 0:
+            # Extract radius correctly from visual shape data
+            visual_data = p.getVisualShapeData(body)[0]
+            dimensions = visual_data[3]
+            radius = dimensions[0]
+
+            # Apply standard drag equation: F_drag = 0.5 * ρ * v² * C_d * A
+            area = np.pi * (radius**2)
+            drag_mag = 0.5 * drag_coeff * air_density * area * (speed**2)
+            drag_force = [-drag_mag * v / speed for v in velocity]
+
+            p.applyExternalForce(body, -1, drag_force, [0, 0, 0], p.WORLD_FRAME)
+
+    def simulate(self, duration, apply_drag=True):
+        """
+        Run the physics simulation for a specified duration.
+
+        Args:
+            duration: Time to simulate in seconds
+            apply_drag: Whether to apply air resistance (True by default)
+        """
+
+        steps = int(duration / p.getPhysicsEngineParameters()["fixedTimeStep"])
+        for _ in range(steps):
+            if apply_drag:
+                for projectile in self.projectiles:
+                    self._apply_drag(projectile)
+            p.stepSimulation()
+
+            # Record trajectories
+            for i, projectile in enumerate(self.projectiles):
+                pos, _ = p.getBasePositionAndOrientation(projectile)
+                self.trajectories[i].append(pos)
+
+    def plot_trajectory_3d(self):
+        """
+        Create a 3D plot showing the trajectory of all projectiles.
+        """
+
+        fig = plt.figure()
+        ax = fig.add_subplot(111, projection="3d")
+
+        for trajectory in self.trajectories:
+            x = [p[0] for p in trajectory]
+            y = [p[1] for p in trajectory]
+            z = [p[2] for p in trajectory]
+            ax.plot(x, y, z, label="Projectile")
+
+        ax.set_xlabel("X (m)")
+        ax.set_ylabel("Y (m)")
+        ax.set_zlabel("Z (m)")
+        plt.title("3D Projectile Trajectory")
+        plt.show()
