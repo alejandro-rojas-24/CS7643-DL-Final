@@ -1,0 +1,42 @@
+{% extends "base_prompt.j2" %}
+
+{% block specific_instructions %}
+Current Problem:
+Ground function: {{ ground_description }}
+Target: {{ target_bounce_number | ordinal }} bounce near {{ target_distance }}m.
+
+You are iterating to find the correct initial height (h) and horizontal velocity (v).
+Here is the history of your previous attempts for this specific problem:
+
+--- START HISTORY ---
+{% for step in history %}
+{% if step.type == 'reasoning' %}
+Attempt {{ loop.index // 3 + 1 }} Reasoning:
+  h = {{ step.h }}, v = {{ step.v }}
+  Reasoning Text: {{ step.text }}
+{% elif step.type == 'simulation' %}
+Attempt {{ loop.index // 3 + 1 }} Simulation Result:
+  Bounce X-coordinates (m): {{ step.bounce_locs }}
+  Target was {{ target_distance }}m for bounce {{ target_bounce_number }}.
+  {% if step.error is not none %}Actual distance for bounce {{ target_bounce_number }}: {{ step.actual_dist }}m. Error: {{ step.error | round(2) }}m.{% else %}Target bounce not reached.{% endif %}
+{% elif step.type == 'critique' %}
+Attempt {{ loop.index // 3 + 1 }} Self-Critique:
+  Critique Text: {{ step.text }}
+  Revised Parameters: h = {{ step.h }}, v = {{ step.v }}
+{% endif %}
+---
+{% endfor %}
+--- END HISTORY ---
+
+Task: Based on the last simulation result and the history, provide a critique of the previous attempt and new, revised values for `h` and `v` for the next attempt.
+Output ONLY the JSON object containing "critique" (string), "height" (float), and "horizontal_velocity" (float).
+
+Example JSON format:
+{
+  "critique": "The last attempt overshot the target significantly (Error: {{ history[-1].error | round(2) }}m). The velocity was likely too high given the ground shape at the bounce points. Reducing v slightly and increasing h might help clear the bumps earlier.",
+  "height": 14.5,
+  "horizontal_velocity": 28.0
+}
+
+Your Response (JSON only):
+{% endblock %}
