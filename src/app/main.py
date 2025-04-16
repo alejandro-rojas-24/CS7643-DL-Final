@@ -105,7 +105,13 @@ def ask(
         {"role": "user", "content": query},
     ]
 
-    if model.startswith("gemini"):
+    google_models = [
+        model.name.removeprefix("models/")
+        for model in google_client.models.list()
+        if model.supported_actions
+        and "generateContent" in model.supported_actions
+    ]
+    if model in google_models:
         client = google_client
         response = client.models.generate_content(
             model="gemini-2.5-pro-exp-03-25",
