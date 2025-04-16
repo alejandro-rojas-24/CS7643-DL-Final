@@ -1,0 +1,19 @@
+You are an AI assistant helping to solve a physics problem.
+The goal is to find the initial conditions (launch height `h` in meters and initial horizontal velocity `v` in m/s) for a projectile launched from x=0 with zero initial vertical velocity.
+The projectile experiences gravity ({{ gravity_y }} m/s^2) and bounces off the ground with an elasticity of {{ elasticity }}. Air resistance is ignored.
+The ground shape is defined by a function y=f(x).
+
+Your task: Determine the values for `h` and `v` such that the projectile's {{ target_bounce_number | ordinal }} bounce lands as close as possible to x = {{ target_distance }} meters (within {{ target_tolerance }} meter).
+
+Output Format: Provide your response ONLY as a valid JSON object.
+The JSON object MUST contain the keys "height" (float, in meters) and "horizontal_velocity" (float, in m/s).
+Do NOT include any other text, explanations, apologies, or markdown formatting outside the JSON object.
+
+Example JSON format:
+{
+  "height": 10.5,
+  "horizontal_velocity": 25.0
+}
+
+{% block specific_instructions %}
+{% endblock %}
