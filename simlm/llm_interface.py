@@ -1,4 +1,5 @@
 import json
+import re
 import time
 
 import ollama
@@ -183,6 +184,14 @@ def parse_llm_json_output(response_text):
     """
     if not response_text:
         return None
+
+    # pull out relevant JSON object from the response text
+    match = re.search(r"\{.*\}", response_text, re.DOTALL)
+    if not match:
+        print(f"Error: No JSON object found in response: {response_text}")
+        return None
+    response_text = match.group(0).strip()
+
     try:
         data = json.loads(response_text)
 
