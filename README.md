@@ -111,11 +111,78 @@ docker compose down
 ```
 
 
+## Available Models
+
+For a full set of available Ollama models, visit the
+[Ollama Model Library](https://ollama.com/library).
+
+For a full set of available Google models, visit the
+[Gemini API Docs](https://ai.google.dev/gemini-api/docs/models).
+Note that while most models are available for free, some may require a paid
+subscription or have usage limits.
+
+For a full set of available OpenAI models, visit the [OpenAI Pricing Page](https://platform.openai.com/docs/pricing).
+
+## Recommended Models
+
+The collection of recommended models below is based on the
+state-of-the-art larg language models as of April 2025.
+Due to hardware limitations, Ollama models (run locally) generally stay under
+20GB.
+
+The models listed below include many dimensions to explore, including
+
+- Size (number of parameters)
+- Model (e.g. gemma, mistral, phi, llama, deepseek, gemini, gpt)
+- Small, generalized, and thinking models of the same flavor (e.g. flash-lite vs
+  flash vs pro)
+- Open sourced vs proprietary models (e.g. Ollama models vs Google vs OpenAI)
+
+Note that the OpenAI models do include a small fee.
+GPT-3.5-turbo is included because it is the closest model to treat as a baseline to the
+SimLM paper.
+GPT-4.1-nano is included as the cheapest state of the art model available
+from OpenAI.
 
 
+### Recommended Ollama Models 
 
+| Model Name | Parameters | Size | Description |
+|------------|------------|------|-------------|
+| `gemma3:1b` | 1 billion | 815MB | From Google |
+| `gemma3:4b` | 4 billion | 3.3GB | From Google |
+| `gemma3:12b` | 12 billion | 8.1GB | From Google |
+| `gemma3:27b` | 27 billion | 17GB | From Google |
+| `mistral-small3.1` | 24 billion | 15GB | Mistral's small model |
+| `mistral` | 7 billion | 4.1GB | The 7B model released by Mistral AI, updated to version 0.3.  |
+| `phi4` | 14 billion | 8.1GB | Phi model from Microsoft |
+| `phi4-mini` | 3.8 billion | 2.5GB | Phi-4-mini brings significant enhancements in multilingual support, reasoning, and mathematics, and now, the long-awaited function calling feature is finally supported.  |
+| `llama3.2:1b` | 1 billion | 1.2GB | Llama 3.2 model from Meta |
+| `llama3.2:3b` | 3 billion | 2.8GB | Llama 3.2 model from Meta |
+| `deepseek-r1:1.5b` | 1.5 billion | 1.2GB | DeepSeek's first-generation of reasoning models with comparable performance to OpenAI-o1. |
+| `deepseek-r1:7b` | 7 billion | 4.7GB | DeepSeek's first-generation of reasoning models with comparable performance to OpenAI-o1. |
+| `deepskeek-r1:14b` | 14 billion | 9.0GB | DeepSeek's first-generation of reasoning models with comparable performance to OpenAI-o1. |
+| `deepseek-r1:32b` | 32 billion | 20GB | DeepSeek's first-generation of reasoning models with comparable performance to OpenAI-o1. |
 
-Okay, here's the updated "Configuration" section for your README.md, reflecting the structured configuration approach shown in your YAML snippet. It assumes you'll be loading these settings from a file (e.g., `config.yaml`) into your Python code, replacing the direct use of constants from `config.py`.
+### Recommended Google Models
+
+| Model Name | Cost | Description |
+|------------|------|-------------|
+| `gemini-2.5-flash-preview-04-17` | Free | Flash model from Google |
+| `gemini-2.5-pro-exp-03-25` | Free | Gemini 2.5 Pro model, experimental version with enhanced capabilities |
+| `gemini-2.0-flash` | Free | Flash model from Google |
+| `gemini-2.0-flash-lite` | Free | Flash Lite model from Google |
+| `gemini-1.5-flash` | Free | Flash model from Google |
+| `gemini-1.5-flash-8b` | Free | Gemini 1.5 Flash-8B is a small model designed for lower intelligence tasks.  |
+| `gemini-1.5-flash-pro` | Free | Flash model from Google |
+
+### Recommended OpenAI Models
+
+| Model Name | Input Cost | Output Cost | Description |
+|------------|------------------|------|-------------|
+| `gpt-3.5-turbo` | $0.50 per million tokens | $1.50 per million  | Fast and cost-effective model for general tasks |
+| `gpt-4.1-nano` | $0.025 per million tokens | $0.40 per million tokens | Smallest GPT-4 model |
+
 
 ---
 
