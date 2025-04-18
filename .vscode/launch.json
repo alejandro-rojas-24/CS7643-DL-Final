@@ -5,6 +5,17 @@
     "version": "0.2.0",
     "configurations": [
         {
+<<<<<<< HEAD
+=======
+            "name": "Python Debugger: Current File with Arguments",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "args": "${command:pickArgs}"
+        },
+        {
+>>>>>>> 3e1d2746f38f0b43c54bb6c21f137767304256f8
             "name": "Python Debugger: Current File",
             "type": "debugpy",
             "request": "launch",

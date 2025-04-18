@@ -1,2 +1,13 @@
+<<<<<<< HEAD
 venv/*
 .env
+=======
+__pycache__
+.pytest_cache/*
+*.pyc
+venv/*
+.venv/*
+*.env
+*.DS_Store
+simlm/__pycache__/*
+>>>>>>> 3e1d2746f38f0b43c54bb6c21f137767304256f8
