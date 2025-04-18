@@ -3,11 +3,11 @@ import json
 import os
 
 from argparse import ArgumentParser
+from importlib import import_module
 
-from simlm.ground import FlatGround, HardGround, SineGround
+from simlm.ground import FlatGround, SineGround, InterpolatedGround
 from simlm.projectiles import ProjectileSimulator
 from simlm.runner import SimLMRunner
-
 
 
 def save_results(results, filename="results/experiment_results.jsonl"):
@@ -38,12 +38,6 @@ if __name__ == "__main__":
     with open(args.config, 'r') as f:
         config = yaml.safe_load(f)
 
-    runner = SimLMRunner(config)
-
-    #     model_identifier=llm.get("model", "gpt-3.5-turbo"),
-    #     temperature=llm.get("temperature", 0.5),
-    # )
-
     # Load Few-Shot Examples
     # few_shot_examples_cot = load_examples(config.get("few_shot_examples_path", "examples/few_shot_data.yml"))
     # few_shot_examples_simlm = load_examples(config.get("few_shot_examples_path", "examples/few_shot_data.yml"))
@@ -51,26 +45,29 @@ if __name__ == "__main__":
     few_shot_examples_simlm = None
 
     # Run Experiments
+    experiment = config.get("experiment", "flat")
+    runner = SimLMRunner(config)
+
     # Experiment A: Flat Ground
-    print("\nExperiment A: Flat Ground")
-    flat_ground = FlatGround()
-    result_a_cot = runner.run_baseline_cot(flat_ground, few_shot_examples_cot)
-    save_results(result_a_cot)
-    result_a_simlm = runner.run_simlm(flat_ground, few_shot_examples_simlm)
-    save_results(result_a_simlm)
+    if experiment == "flat":    
+        print("\nExperiment A: Flat Ground")
+        ground = FlatGround()
 
     # Experiment B: Uneven Sinusoid Ground
-    print("\nExperiment B: Sine Ground")
-    sine_ground = SineGround(0.25, 0.5)
-    result_b_cot = runner.run_baseline_cot(sine_ground, few_shot_examples_cot)
-    save_results(result_b_cot)
-    result_b_simlm = runner.run_simlm(sine_ground, few_shot_examples_simlm)
-    save_results(result_b_simlm)
+    if experiment == "sine":
+        print("\nExperiment B: Sine Ground")
+        ground = SineGround(
+            config.get("amplitude", 0.25), 
+            config.get("frequency", 0.5)
+        )
 
-    # Experiment C: Hard ground
-    print("\nExperiment C: Hard Ground")
-    hard_ground = HardGround()
-    result_c_cot = runner.run_baseline_cot(hard_ground, few_shot_examples_cot)
-    save_results(result_c_cot)
-    result_c_simlm = runner.run_simlm(hard_ground, few_shot_examples_simlm)
-    save_results(result_c_simlm)
+    # Experiment C: Varying Difficulty 
+    if experiment == "interpolated":
+        print("\nExperiment C: Varying Difficulty")
+        difficulty = config.get("difficulty", 0.5)
+        interpol_ground = InterpolatedGround(difficulty)
+
+    results_cot = runner.run_baseline_cot(ground, few_shot_examples_cot)
+    save_results(results_cot)
+    results_simlm = runner.run_simlm(ground, few_shot_examples_simlm)
+    save_results(results_simlm)
