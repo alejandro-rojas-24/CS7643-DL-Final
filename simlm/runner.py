@@ -3,7 +3,6 @@ import time
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
-import config
 from simlm.ground import Ground
 from simlm.llm_interface import get_llm_response, parse_llm_json_output
 from simlm.projectiles import ProjectileSimulator
@@ -40,32 +39,57 @@ def calculate_error(bounce_locations, target_bounce_num, target_dist):
 
 
 class SimLMRunner:
-    def __init__(self, model_identifier, temperature: float = 0.7) -> None:
-        self.model_identifier = model_identifier
-        self.temperature = temperature
-        self.simulator = ProjectileSimulator()
+    def __init__(self, config: dict) -> None:
+
+        # LLM
+        self.model_identifier = config.get("model", "gpt-3.5-turbo")
+        self.temperature = config.get("temperature", 0.5)
+        
+        # Simulation
+        self.fps = config.get("fps", 1000)
+        self.gravity_y = config.get("gravity_y", -9.81)
+        self.max_duration = config.get("max_duration", 20)
+        self.elasticity = config.get("elasticity", 0.9)
+        self.mass = config.get("mass", 1.0)
+        self.radius = config.get("radius", 0.05)
+        self.simulator = ProjectileSimulator(
+            fps=self.fps,
+            gravity_y=self.gravity_y
+        )
+        # Ground
+        self.x_min = config.get("x_min", -10.0)
+        self.x_max = config.get("x_max", 100.0)
+        self.step = config.get("step", 0.1)
+        self.friction = config.get("friction", 0.8)
+
+        # Experiment
+        self.distance = config.get("target_distance", 50.0)
+        self.bounce_number = config.get("target_bounce_number", 3)
+        self.tolerance = config.get("target_tolerance", 1.0)
+        self.max_iterations = config.get("max_iterations", 5)
+    
 
     def _run_simulation(self, h, v, ground: Ground):
         """Sets up and runs a single simulation instance."""
         # Reset the simulator space for a clean run
         self.simulator._setup_space()
         self.simulator.add_ground(
-            config.GROUND_X_MIN,
-            config.GROUND_X_MAX,
-            config.GROUND_STEP,
+            self.x_min,
+            self.x_max,
+            self.step,
             ground,
-            config.SIM_GROUND_FRICTION,
+            self.friction,
         )
         self.simulator.add_projectile(
             h,
             v,
-            config.SIM_PROJECTILE_MASS,
-            config.SIM_PROJECTILE_RADIUS,
-            config.SIM_PROJECTILE_ELASTICITY,
+            self.mass,
+            self.radius,
+            self.elasticity
         )
         bounce_locs = self.simulator.simulate(
-            target_bounces=config.TARGET_BOUNCE_NUMBER,
-            duration=config.SIM_MAX_DURATION,
+            target_bounces=self.bounce_number,
+            duration=self.max_duration,
         )
         return bounce_locs
 
@@ -76,11 +100,11 @@ class SimLMRunner:
 
         template = jinja_env.get_template("cot_prompt.j2")
         prompt = template.render(
-            gravity_y=config.SIM_GRAVITY_Y,
-            elasticity=config.SIM_PROJECTILE_ELASTICITY,
-            target_bounce_number=config.TARGET_BOUNCE_NUMBER,
-            target_distance=config.TARGET_DISTANCE,
-            target_tolerance=config.TARGET_TOLERANCE,
+            gravity_y=self.gravity_y,
+            elasticity=self.elasticity,
+            target_bounce_number=self.bounce_number,
+            target_distance=self.distance,
+            target_tolerance=self.tolerance,
             examples=few_shot_examples,
             ground_description=str(ground),
         )
@@ -106,12 +130,12 @@ class SimLMRunner:
 
         bounce_locs = self._run_simulation(h, v, ground)
         actual_dist, error = calculate_error(
-            bounce_locs, config.TARGET_BOUNCE_NUMBER, config.TARGET_DISTANCE
+            bounce_locs, self.bounce_number, self.distance
         )
 
         end_time = time.time()
         result = {
-            "success": error is not None and error <= config.TARGET_TOLERANCE,
+            "success": error is not None and error <= self.tolerance,
             "strategy": "CoT",
             "model": self.model_identifier,
             "ground": str(ground),
@@ -122,7 +146,7 @@ class SimLMRunner:
             "actual_distance_bounce_3": actual_dist,
             "error": error,
             "within_tolerance": error is not None
-            and error <= config.TARGET_TOLERANCE,
+            and error <= self.tolerance,
             "time_taken": end_time - start_time,
         }
         print(
@@ -140,20 +164,20 @@ class SimLMRunner:
         history = []  # Stores dicts for each step: {'type': 'reasoning'/'simulation'/'critique', ...}
         current_h, current_v = None, None
 
-        for iteration in range(config.SIMLM_MAX_ITERATIONS):
+        for iteration in range(self.max_iterations):
             print(
-                f"\nSimLM Iteration {iteration + 1}/{config.SIMLM_MAX_ITERATIONS}"
+                f"\nSimLM Iteration {iteration + 1}/{self.max_iterations}"
             )
 
             # 1. Prepare Prompt (Reasoning or Critique)
             if iteration == 0:
                 template = jinja_env.get_template("reasoning_prompt.j2")
                 prompt = template.render(
-                    gravity_y=config.SIM_GRAVITY_Y,
-                    elasticity=config.SIM_PROJECTILE_ELASTICITY,
-                    target_bounce_number=config.TARGET_BOUNCE_NUMBER,
-                    target_distance=config.TARGET_DISTANCE,
-                    target_tolerance=config.TARGET_TOLERANCE,
+                    gravity_y=self.gravity_y,
+                    elasticity=self.elasticity,
+                    target_bounce_number=self.bounce_number,
+                    target_distance=self.distance,
+                    target_tolerance=self.tolerance,
                     examples=few_shot_examples,
                     ground_description=str(ground),
                 )
@@ -162,11 +186,11 @@ class SimLMRunner:
             else:
                 template = jinja_env.get_template("critique_prompt.j2")
                 prompt = template.render(
-                    gravity_y=config.SIM_GRAVITY_Y,
-                    elasticity=config.SIM_PROJECTILE_ELASTICITY,
-                    target_bounce_number=config.TARGET_BOUNCE_NUMBER,
-                    target_distance=config.TARGET_DISTANCE,
-                    target_tolerance=config.TARGET_TOLERANCE,
+                    gravity_y=self.gravity_y,
+                    elasticity=self.elasticity,
+                    target_bounce_number=self.bounce_number,
+                    target_distance=self.distance,
+                    target_tolerance=self.tolerance,
                     ground_description=str(ground),
                     history=history,  # Pass the whole history
                 )
@@ -192,7 +216,7 @@ class SimLMRunner:
                 )
                 success_flag = (
                     final_error is not None
-                    and final_error <= config.TARGET_TOLERANCE
+                    and final_error <= self.tolerance
                 )
                 return {
                     "success": success_flag,
@@ -224,8 +248,8 @@ class SimLMRunner:
             bounce_locs = self._run_simulation(current_h, current_v, ground)
             actual_dist, error = calculate_error(
                 bounce_locs,
-                config.TARGET_BOUNCE_NUMBER,
-                config.TARGET_DISTANCE,
+                self.bounce_number,
+                self.distance,
             )
 
             print(
@@ -246,7 +270,7 @@ class SimLMRunner:
 
             # 4. Check Success Condition (as per paper: LLM prompted to stop if requirements met)
             # We implement this check externally here.
-            if error is not None and error <= config.TARGET_TOLERANCE:
+            if error is not None and error <= self.tolerance:
                 print(
                     f"Success! Target achieved within tolerance at iteration {iteration + 1}."
                 )
@@ -271,7 +295,7 @@ class SimLMRunner:
         )
 
         success_flag = (
-            final_error is not None and final_error <= config.TARGET_TOLERANCE
+            final_error is not None and final_error <= self.tolerance
         )
 
         result = {
