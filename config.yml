@@ -3,7 +3,7 @@ experiment: "flat" # "sine" "interpolated"
 few_shot_examples_path: "examples/few_shot_data.yaml"
 target_distance: 50.0
 target_bounce_number: 3
-target_tolerance: 30
+target_tolerance: 1
 max_iterations: 5
 
 # LLM
