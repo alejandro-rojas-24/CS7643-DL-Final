@@ -66,7 +66,6 @@ class ProjectileSimulator:
             )
             segment.friction = friction
             segment.collision_type = collision_type
-            # segment.filter = pymunk.ShapeFilter(group=1)
             self.space.add(segment)
         # For plotting later
         self.ground_x_vals = x_vals
@@ -106,9 +105,6 @@ class ProjectileSimulator:
         shape = pymunk.Circle(self.projectile_body, radius)
         shape.elasticity = elasticity
         shape.collision_type = collision_type
-
-        # Ensure projectile can collide with ground
-        shape.filter = pymunk.ShapeFilter(group=1)
 
         self.space.add(self.projectile_body, shape)
 
@@ -206,6 +202,7 @@ class ProjectileSimulator:
         # Plot bounces if available
         if self.bounce_locations:
             bounce_ys = [self.ground_func(x) for x in self.bounce_locations] # Approximate Y on ground
+            print(f"Debug: Final bounce locations: {self.bounce_locations}")
             plt.scatter(self.bounce_locations, bounce_ys, color='b', zorder=5, label='Bounces')
 
         plt.xlabel('X position (m)')
@@ -220,6 +217,6 @@ class ProjectileSimulator:
             x_min_traj, x_max_traj = np.min(positions[:, 0]), np.max(positions[:, 0])
             y_min_traj, y_max_traj = np.min(positions[:, 1]), np.max(positions[:, 1])
             plt.xlim(min(self.ground_x_vals.min(), x_min_traj - 5), max(self.ground_x_vals.max(), x_max_traj + 5))
-            plt.ylim(min(self.ground_y_vals.min(), y_min_traj - 5), max(y_max_traj + 5))
+            plt.ylim(min(self.ground_y_vals.min(), y_min_traj - 5), max(self.ground_y_vals.max(), y_max_traj + 5))
 
         plt.show()

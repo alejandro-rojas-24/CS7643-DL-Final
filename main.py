@@ -71,3 +71,31 @@ if __name__ == "__main__":
     save_results(results_cot)
     results_simlm = runner.run_simlm(ground, few_shot_examples_simlm)
     save_results(results_simlm)
+
+        # Plot final trajectory for the last SimLM run 
+    if results_simlm and results_simlm.get("success") is not False and 'final_h' in results_simlm:
+        print("\nPlotting final trajectory for successful SimLM run (Experiment C)...")
+        # Need to re-run sim to get full trajectory points
+        final_h = results_simlm['final_h']
+        final_v = results_simlm['final_v']
+        plot_sim = ProjectileSimulator(runner.fps)
+        plot_sim.add_ground(
+           runner.x_min,
+           runner.x_max,
+           runner.step,
+           ground,
+           runner.friction,
+        )
+        plot_sim.add_projectile(
+           final_h,
+           final_v,
+           runner.mass,
+           runner.radius,
+           runner.elasticity
+        )
+        # Simulate for a bit longer to see the full path
+        trajectory = plot_sim.get_trajectory(duration=runner.max_duration / 2)
+        plot_sim.bounce_locations = results_simlm.get("bounce_locations", []) # Add bounces back for plot
+        plot_sim.plot_trajectory(trajectory, title=f"SimLM Final Trajectory")
+
+    print("\nExperiment Runs Complete.")
