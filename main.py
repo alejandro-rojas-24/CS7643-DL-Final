@@ -1,10 +1,13 @@
+import yaml
 import json
 import os
 
-import config
+from argparse import ArgumentParser
+
 from simlm.ground import FlatGround, HardGround, SineGround
 from simlm.projectiles import ProjectileSimulator
 from simlm.runner import SimLMRunner
+
 
 
 def save_results(results, filename="results/experiment_results.jsonl"):
@@ -17,7 +20,7 @@ def save_results(results, filename="results/experiment_results.jsonl"):
         print(f"Error saving results: {e}")
 
 
-def load_examples(filepath=config.FEW_SHOT_EXAMPLES_PATH):
+def load_examples(filepath="examples/few_shot_data.yaml"):
     """Placeholder function to load few-shot examples."""
     # Example structure expected by templates:
     # [ {'query': str, 'reasoning': str, 'answer_json': str}, ... ] for CoT
@@ -27,16 +30,23 @@ def load_examples(filepath=config.FEW_SHOT_EXAMPLES_PATH):
 
 
 if __name__ == "__main__":
-    # Select Model
-    model = config.MODEL
-    runner = SimLMRunner(
-        model_identifier=model,
-        temperature=config.TEMPERATURE,
-    )
+
+    parser = ArgumentParser()
+    parser.add_argument("--config", "-c", help="Configuration file for simlm.", default="config.yml")
+    args = parser.parse_args()
+
+    with open(args.config, 'r') as f:
+        config = yaml.safe_load(f)
+
+    runner = SimLMRunner(config)
+
+    #     model_identifier=llm.get("model", "gpt-3.5-turbo"),
+    #     temperature=llm.get("temperature", 0.5),
+    # )
 
     # Load Few-Shot Examples
-    # few_shot_examples_cot = load_examples("examples/cot_examples.yaml")
-    # few_shot_examples_simlm = load_examples("examples/simlm_examples.yaml")
+    # few_shot_examples_cot = load_examples(config.get("few_shot_examples_path", "examples/few_shot_data.yml"))
+    # few_shot_examples_simlm = load_examples(config.get("few_shot_examples_path", "examples/few_shot_data.yml"))
     few_shot_examples_cot = None  # Using 0-shot for simplicity now
     few_shot_examples_simlm = None
 

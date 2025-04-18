@@ -6,7 +6,6 @@ import pymunk
 import numpy as np
 import matplotlib.pyplot as plt
 import time
-from config import ( SIM_MAX_DURATION)
 
 class ProjectileSimulator:
     def __init__(self, fps=1000, gravity_y=-9.81):

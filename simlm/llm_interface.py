@@ -1,13 +1,21 @@
 import json
 import re
 import time
+import os
 
 import ollama
 from google import genai
 from google.genai.types import GenerateContentConfig
 from openai import APIError, OpenAI, RateLimitError
 
-from config import GEMINI_API_KEY, OLLAMA_BASE_URL, OPENAI_API_KEY
+from dotenv import load_dotenv
+
+load_dotenv()
+
+# LLM Configuration
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "YOUR_OPENAI_API_KEY_HERE")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "YOUR_GEMINI_API_KEY_HERE")
+OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 
 try:
     openai_client = OpenAI(api_key=OPENAI_API_KEY)
