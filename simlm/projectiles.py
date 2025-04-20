@@ -39,6 +39,8 @@ class ProjectileSimulator:
         self.fps = fps
         self.dt = 1.0 / fps
         self.gravity = (0, gravity_y)
+        self.ball_collision_type = 1
+        self.ground_collision_type = 1
         self._setup_space()
         self.bounce_locations = []
         self.projectile_body = None  # Keep track of the projectile
@@ -50,7 +52,9 @@ class ProjectileSimulator:
         self.bounce_locations = []
 
         # Collision handler to detect bounces
-        handler = self.space.add_collision_handler(0, 0)
+        handler = self.space.add_collision_handler(
+            self.ball_collision_type,
+            self.ground_collision_type)
         handler.post_solve = self._log_bounce
 
     def _log_bounce(self, arbiter, space, data):
@@ -66,7 +70,7 @@ class ProjectileSimulator:
             print(f"Debug: Bounce detected at x={contact_point.x:.2f}")
 
     def add_ground(
-        self, x_min, x_max, step_size, y_func, friction=0.8, collision_type=0
+        self, x_min, x_max, step_size, y_func, friction=0.8
     ):
         """
         Setup ground geometry for the simulation
@@ -90,7 +94,7 @@ class ProjectileSimulator:
                 radius=0.01,
             )
             segment.friction = friction
-            segment.collision_type = collision_type
+            segment.collision_type = self.ground_collision_type
             self.space.add(segment)
         # For plotting later
         self.ground_x_vals = x_vals
@@ -104,7 +108,6 @@ class ProjectileSimulator:
         mass=1,
         radius=0.05,
         elasticity=0.9,
-        collision_type=0,
     ):
         """
         Adds the projectile based on the paper's parameters.
@@ -136,7 +139,7 @@ class ProjectileSimulator:
 
         shape = pymunk.Circle(self.projectile_body, radius)
         shape.elasticity = elasticity
-        shape.collision_type = collision_type
+        shape.collision_type = self.ball_collision_type
 
         self.space.add(self.projectile_body, shape)
 
