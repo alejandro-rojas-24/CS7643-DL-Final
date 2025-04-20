@@ -129,9 +129,7 @@ def call_google_api(
     for attempt in range(max_retries):
         try:
             response = google_client.models.generate_content(
-                model=model_name.removeprefix("google/").removeprefix(
-                    "models/"
-                ),
+                model=model_name.removeprefix("google/").removeprefix("models/"),
                 contents=prompt,
                 config=GenerateContentConfig(
                     temperature=temperature,
@@ -160,18 +158,12 @@ def get_llm_response(model_identifier, prompt, temperature=0.7):
     """
     if model_identifier.startswith("ollama/"):
         ollama_model_name = model_identifier.split("/", 1)[1]
-        return call_ollama_api(
-            ollama_model_name, prompt, temperature=temperature
-        )
+        return call_ollama_api(ollama_model_name, prompt, temperature=temperature)
     if model_identifier.startswith("google/"):
         ollama_model_name = model_identifier.split("/", 1)[1]
-        return call_google_api(
-            ollama_model_name, prompt, temperature=temperature
-        )
+        return call_google_api(ollama_model_name, prompt, temperature=temperature)
     elif openai_client:
-        return call_openai_api(
-            model_identifier, prompt, temperature=temperature
-        )
+        return call_openai_api(model_identifier, prompt, temperature=temperature)
     else:
         print(
             f"Error: Model provider for '{model_identifier}' not configured or available."
@@ -214,17 +206,13 @@ def parse_llm_json_output(response_text):
 
         for key in required_numeric_keys:
             if key not in data:
-                print(
-                    f"Error: Missing required key '{key}' in LLM JSON output: {data}"
-                )
+                print(f"Error: Missing required key '{key}' in LLM JSON output: {data}")
                 return None
             try:
                 # Convert to float, handle potential non-numeric values
                 parsed_data[key] = float(data[key])
             except (ValueError, TypeError):
-                print(
-                    f"Error: Could not convert '{key}' value '{data[key]}' to float."
-                )
+                print(f"Error: Could not convert '{key}' value '{data[key]}' to float.")
                 return None
 
         # Add optional keys if present
@@ -234,12 +222,8 @@ def parse_llm_json_output(response_text):
             parsed_data["critique"] = data["critique"]
 
         # Parameter sanity checks
-        if not (
-            0 < parsed_data["height"] < 1000
-        ):  # e.g., height between 0 and 1km
-            print(
-                f"Warning: Parsed height {parsed_data['height']} seems unrealistic."
-            )
+        if not (0 < parsed_data["height"] < 1000):  # e.g., height between 0 and 1km
+            print(f"Warning: Parsed height {parsed_data['height']} seems unrealistic.")
         if not (
             0 < parsed_data["horizontal_velocity"] < 1000
         ):  # e.g., velocity < 1km/s

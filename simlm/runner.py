@@ -44,7 +44,7 @@ class SimLMRunner:
         # LLM
         self.model_identifier = config.get("model", "gpt-3.5-turbo")
         self.temperature = config.get("temperature", 0.5)
-        
+
         # Simulation
         self.fps = config.get("fps", 1000)
         self.gravity_y = config.get("gravity_y", -9.81)
@@ -52,10 +52,7 @@ class SimLMRunner:
         self.elasticity = config.get("elasticity", 0.9)
         self.mass = config.get("mass", 1.0)
         self.radius = config.get("radius", 0.05)
-        self.simulator = ProjectileSimulator(
-            fps=self.fps,
-            gravity_y=self.gravity_y
-        )
+        self.simulator = ProjectileSimulator(fps=self.fps, gravity_y=self.gravity_y)
         # Ground
         self.x_min = config.get("x_min", -10.0)
         self.x_max = config.get("x_max", 100.0)
@@ -67,7 +64,6 @@ class SimLMRunner:
         self.bounce_number = config.get("target_bounce_number", 3)
         self.tolerance = config.get("target_tolerance", 1.0)
         self.max_iterations = config.get("max_iterations", 5)
-    
 
     def _run_simulation(self, h, v, ground: Ground):
         """Sets up and runs a single simulation instance."""
@@ -80,13 +76,7 @@ class SimLMRunner:
             ground,
             self.friction,
         )
-        self.simulator.add_projectile(
-            h,
-            v,
-            self.mass,
-            self.radius,
-            self.elasticity
-        )
+        self.simulator.add_projectile(h, v, self.mass, self.radius, self.elasticity)
         bounce_locs = self.simulator.simulate(
             target_bounces=self.bounce_number,
             duration=self.max_duration,
@@ -109,9 +99,7 @@ class SimLMRunner:
             ground_description=str(ground),
         )
 
-        raw_response = get_llm_response(
-            self.model_identifier, prompt, self.temperature
-        )
+        raw_response = get_llm_response(self.model_identifier, prompt, self.temperature)
         parsed_data = parse_llm_json_output(raw_response)
 
         if (
@@ -145,8 +133,7 @@ class SimLMRunner:
             "bounce_locations": bounce_locs,
             "actual_distance_bounce_3": actual_dist,
             "error": error,
-            "within_tolerance": error is not None
-            and error <= self.tolerance,
+            "within_tolerance": error is not None and error <= self.tolerance,
             "time_taken": end_time - start_time,
         }
         print(
@@ -161,13 +148,13 @@ class SimLMRunner:
         """Runs the SimLM iterative method."""
         print(f"\nRunning SimLM for {ground}")
         start_time = time.time()
-        history = []  # Stores dicts for each step: {'type': 'reasoning'/'simulation'/'critique', ...}
+        history = (
+            []
+        )  # Stores dicts for each step: {'type': 'reasoning'/'simulation'/'critique', ...}
         current_h, current_v = None, None
 
         for iteration in range(self.max_iterations):
-            print(
-                f"\nSimLM Iteration {iteration + 1}/{self.max_iterations}"
-            )
+            print(f"\nSimLM Iteration {iteration + 1}/{self.max_iterations}")
 
             # 1. Prepare Prompt (Reasoning or Critique)
             if iteration == 0:
@@ -203,21 +190,14 @@ class SimLMRunner:
             )
             parsed_data = parse_llm_json_output(raw_response)
 
-            if not parsed_data or not all(
-                key in parsed_data for key in expected_keys
-            ):
+            if not parsed_data or not all(key in parsed_data for key in expected_keys):
                 print(
                     f"Error: Failed to get valid {step_type} and parameters from LLM on iteration {iteration + 1}."
                 )
                 final_error = (
-                    history[-1]["error"]
-                    if history and "error" in history[-1]
-                    else None
+                    history[-1]["error"] if history and "error" in history[-1] else None
                 )
-                success_flag = (
-                    final_error is not None
-                    and final_error <= self.tolerance
-                )
+                success_flag = final_error is not None and final_error <= self.tolerance
                 return {
                     "success": success_flag,
                     "error": f"LLM Parsing Failed Iter {iteration + 1}",
@@ -279,9 +259,7 @@ class SimLMRunner:
         # End of loop or break
         end_time = time.time()
         final_error = (
-            history[-1]["error"]
-            if history and "error" in history[-1]
-            else None
+            history[-1]["error"] if history and "error" in history[-1] else None
         )
         final_dist = (
             history[-1]["actual_dist"]
@@ -294,9 +272,7 @@ class SimLMRunner:
             else []
         )
 
-        success_flag = (
-            final_error is not None and final_error <= self.tolerance
-        )
+        success_flag = final_error is not None and final_error <= self.tolerance
 
         result = {
             "success": success_flag,
@@ -304,8 +280,7 @@ class SimLMRunner:
             "model": self.model_identifier,
             "ground": str(ground),
             # Estimate based on steps stored
-            "iterations_run": len(history) // 3
-            + (1 if len(history) % 3 > 0 else 0),
+            "iterations_run": len(history) // 3 + (1 if len(history) % 3 > 0 else 0),
             "final_h": current_h,
             "final_v": current_v,
             "bounce_locations": final_bounces,

@@ -32,10 +32,12 @@ def load_examples(filepath="examples/few_shot_data.yaml"):
 if __name__ == "__main__":
 
     parser = ArgumentParser()
-    parser.add_argument("--config", "-c", help="Configuration file for simlm.", default="config.yml")
+    parser.add_argument(
+        "--config", "-c", help="Configuration file for simlm.", default="config.yml"
+    )
     args = parser.parse_args()
 
-    with open(args.config, 'r') as f:
+    with open(args.config, "r") as f:
         config = yaml.safe_load(f)
 
     # Load Few-Shot Examples
@@ -49,19 +51,16 @@ if __name__ == "__main__":
     runner = SimLMRunner(config)
 
     # Experiment A: Flat Ground
-    if experiment == "flat":    
+    if experiment == "flat":
         print("\nExperiment A: Flat Ground")
         ground = FlatGround()
 
     # Experiment B: Uneven Sinusoid Ground
     if experiment == "sine":
         print("\nExperiment B: Sine Ground")
-        ground = SineGround(
-            config.get("amplitude", 0.25), 
-            config.get("frequency", 0.5)
-        )
+        ground = SineGround(config.get("amplitude", 0.25), config.get("frequency", 0.5))
 
-    # Experiment C: Varying Difficulty 
+    # Experiment C: Varying Difficulty
     if experiment == "interpolated":
         print("\nExperiment C: Varying Difficulty")
         difficulty = config.get("difficulty", 0.5)
@@ -72,30 +71,32 @@ if __name__ == "__main__":
     results_simlm = runner.run_simlm(ground, few_shot_examples_simlm)
     save_results(results_simlm)
 
-        # Plot final trajectory for the last SimLM run 
-    if results_simlm and results_simlm.get("success") is not False and 'final_h' in results_simlm:
+    # Plot final trajectory for the last SimLM run
+    if (
+        results_simlm
+        and results_simlm.get("success") is not False
+        and "final_h" in results_simlm
+    ):
         print("\nPlotting final trajectory for successful SimLM run (Experiment C)...")
         # Need to re-run sim to get full trajectory points
-        final_h = results_simlm['final_h']
-        final_v = results_simlm['final_v']
+        final_h = results_simlm["final_h"]
+        final_v = results_simlm["final_v"]
         plot_sim = ProjectileSimulator(runner.fps)
         plot_sim.add_ground(
-           runner.x_min,
-           runner.x_max,
-           runner.step,
-           ground,
-           runner.friction,
+            runner.x_min,
+            runner.x_max,
+            runner.step,
+            ground,
+            runner.friction,
         )
         plot_sim.add_projectile(
-           final_h,
-           final_v,
-           runner.mass,
-           runner.radius,
-           runner.elasticity
+            final_h, final_v, runner.mass, runner.radius, runner.elasticity
         )
         # Simulate for a bit longer to see the full path
         trajectory = plot_sim.get_trajectory(duration=runner.max_duration / 2)
-        plot_sim.bounce_locations = results_simlm.get("bounce_locations", []) # Add bounces back for plot
+        plot_sim.bounce_locations = results_simlm.get(
+            "bounce_locations", []
+        )  # Add bounces back for plot
         plot_sim.plot_trajectory(trajectory, title=f"SimLM Final Trajectory")
 
     print("\nExperiment Runs Complete.")

@@ -9,9 +9,7 @@ class Ground(ABC):
     """Base class for all ground types."""
 
     @abstractmethod
-    def height(
-        self, x: float | NDArray[np.float64]
-    ) -> float | NDArray[np.float64]:
+    def height(self, x: float | NDArray[np.float64]) -> float | NDArray[np.float64]:
         """
         Return the height of the ground at position x.
 
@@ -54,9 +52,7 @@ class Ground(ABC):
 
         return fig, ax
 
-    def __call__(
-        self, x: float | NDArray[np.float64]
-    ) -> float | NDArray[np.float64]:
+    def __call__(self, x: float | NDArray[np.float64]) -> float | NDArray[np.float64]:
         """
         Allow the ground to be called like a function.
 
@@ -118,9 +114,7 @@ class SineGround(Ground):
         self.amplitude = amplitude
         self.frequency = frequency
 
-    def height(
-        self, x: float | NDArray[np.float64]
-    ) -> float | NDArray[np.float64]:
+    def height(self, x: float | NDArray[np.float64]) -> float | NDArray[np.float64]:
         """
         Return the height of sinusoidal ground at position x.
 
@@ -159,9 +153,7 @@ class EasyGround(Ground):
         self.amplitude = amplitude
         self.frequency = frequency
 
-    def height(
-        self, x: float | NDArray[np.float64]
-    ) -> float | NDArray[np.float64]:
+    def height(self, x: float | NDArray[np.float64]) -> float | NDArray[np.float64]:
         """
         Return the height of easy ground at position x.
 
@@ -187,12 +179,8 @@ class HardGround(Ground):
 
     def __init__(
         self,
-        amplitudes: list[float] | NDArray[np.float64] = np.array(
-            [0.6, 0.15, 0.05]
-        ),
-        frequencies: list[float] | NDArray[np.float64] = np.array(
-            [0.9, 2.25, 4.5]
-        ),
+        amplitudes: list[float] | NDArray[np.float64] = np.array([0.6, 0.15, 0.05]),
+        frequencies: list[float] | NDArray[np.float64] = np.array([0.9, 2.25, 4.5]),
     ) -> None:
         """
         Initialize hard ground with multiple sine components.
@@ -211,15 +199,11 @@ class HardGround(Ground):
         if isinstance(frequencies, list):
             frequencies = np.array(frequencies, dtype=np.float64)
         if amplitudes.shape != frequencies.shape:
-            raise ValueError(
-                "Amplitudes and frequencies must have the same shape"
-            )
+            raise ValueError("Amplitudes and frequencies must have the same shape")
         self.amplitudes = amplitudes
         self.frequencies = frequencies
 
-    def height(
-        self, x: float | NDArray[np.float64]
-    ) -> float | NDArray[np.float64]:
+    def height(self, x: float | NDArray[np.float64]) -> float | NDArray[np.float64]:
         """
         Return the height of hard ground at position x.
 
@@ -270,9 +254,7 @@ class InterpolatedGround(Ground):
         self.easy_ground = easy_ground if easy_ground else EasyGround()
         self.hard_ground = hard_ground if hard_ground else HardGround()
 
-    def height(
-        self, x: float | NDArray[np.float64]
-    ) -> float | NDArray[np.float64]:
+    def height(self, x: float | NDArray[np.float64]) -> float | NDArray[np.float64]:
         """
         Return the height of interpolated ground at position x.
 

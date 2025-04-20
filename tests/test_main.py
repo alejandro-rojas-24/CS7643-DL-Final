@@ -67,5 +67,3 @@ def test_ask_endpoint_download_failure(mock_client):
             )
 
     mock_client.pull.assert_called_once_with(model="unknown_model")
-
-
