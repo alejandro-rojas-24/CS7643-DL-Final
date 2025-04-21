@@ -156,7 +156,7 @@ class SimLMRunner:
         for iteration in range(self.max_iterations):
             print(f"\nSimLM Iteration {iteration + 1}/{self.max_iterations}")
 
-            # 1. Prepare Prompt (Reasoning or Critique)
+            # Prepare Prompt (Reasoning or Critique)
             if iteration == 0:
                 template = jinja_env.get_template("reasoning_prompt.j2")
                 prompt = template.render(
@@ -184,7 +184,7 @@ class SimLMRunner:
                 expected_keys = ["critique", "height", "horizontal_velocity"]
                 step_type = "critique"
 
-            # 2. Call LLM
+            # Call LLM
             raw_response = get_llm_response(
                 self.model_identifier, prompt, self.temperature
             )
@@ -224,7 +224,7 @@ class SimLMRunner:
                 }
             )
 
-            # 3. Run Simulation
+            # Run Simulation
             bounce_locs = self._run_simulation(current_h, current_v, ground)
             actual_dist, error = calculate_error(
                 bounce_locs,
@@ -248,8 +248,7 @@ class SimLMRunner:
                 }
             )
 
-            # 4. Check Success Condition (as per paper: LLM prompted to stop if requirements met)
-            # We implement this check externally here.
+            # Check Success Condition (as per paper: LLM prompted to stop if requirements met)
             if error is not None and error <= self.tolerance:
                 print(
                     f"Success! Target achieved within tolerance at iteration {iteration + 1}."

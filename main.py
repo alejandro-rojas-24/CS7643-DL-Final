@@ -3,7 +3,6 @@ import json
 import os
 
 from argparse import ArgumentParser
-from importlib import import_module
 
 from simlm.ground import FlatGround, SineGround, InterpolatedGround
 from simlm.projectiles import ProjectileSimulator
@@ -74,29 +73,69 @@ if __name__ == "__main__":
     # Plot final trajectory for the last SimLM run
     if (
         results_simlm
-        and results_simlm.get("success") is not False
+        and results_simlm.get("success")
         and "final_h" in results_simlm
+        and "final_v" in results_simlm # Added check for final_v for safety
     ):
         print("\nPlotting final trajectory for successful SimLM run (Experiment C)...")
-        # Need to re-run sim to get full trajectory points
+
+        # 1. Create a simulator instance specifically for plotting
         final_h = results_simlm["final_h"]
         final_v = results_simlm["final_v"]
-        plot_sim = ProjectileSimulator(runner.fps)
+        plot_sim = ProjectileSimulator(runner.fps) # Use the same fps as the runner
+
+        # 2. Set up the ground and projectile with the final parameters
         plot_sim.add_ground(
             runner.x_min,
             runner.x_max,
             runner.step,
-            ground,
+            ground, # Assuming 'ground' is the correct y_func function
             runner.friction,
         )
         plot_sim.add_projectile(
             final_h, final_v, runner.mass, runner.radius, runner.elasticity
         )
-        # Simulate for a bit longer to see the full path
-        trajectory = plot_sim.get_trajectory(duration=runner.max_duration / 2)
-        plot_sim.bounce_locations = results_simlm.get(
-            "bounce_locations", []
-        )  # Add bounces back for plot
-        plot_sim.plot_trajectory(trajectory, title=f"SimLM Final Trajectory")
+
+        # 3. Run the simulation to generate internal trajectory and bounces
+        #    - Run for a desired duration (e.g., original duration or half).
+        #    - Set a high target_bounces so duration is the limiting factor.
+        #    - We don't strictly need the return values here as they are stored internally.
+        plot_duration = runner.max_duration # Or runner.max_duration / 2 if you prefer shorter plot
+        # Use a large number for target_bounces if duration should be the main limiter
+        plot_sim.simulate(target_bounces=100, duration=plot_duration)
+
+        # 4. Call plot_trajectory, which now uses the internal data
+        #    - No need to pass trajectory points.
+        #    - No need to manually set bounce_locations.
+        plot_sim.plot_trajectory(title=f"SimLM Final Trajectory (h={final_h:.2f}, v={final_v:.2f})") # Added params to title
 
     print("\nExperiment Runs Complete.")
+    # # Plot final trajectory for the last SimLM run
+    # if (
+    #     results_simlm
+    #     and results_simlm.get("success") 
+    #     and "final_h" in results_simlm
+    # ):
+    #     print("\nPlotting final trajectory for successful SimLM run (Experiment C)...")
+    #     # Need to re-run sim to get full trajectory points
+    #     final_h = results_simlm["final_h"]
+    #     final_v = results_simlm["final_v"]
+    #     plot_sim = ProjectileSimulator(runner.fps)
+    #     plot_sim.add_ground(
+    #         runner.x_min,
+    #         runner.x_max,
+    #         runner.step,
+    #         ground,
+    #         runner.friction,
+    #     )
+    #     plot_sim.add_projectile(
+    #         final_h, final_v, runner.mass, runner.radius, runner.elasticity
+    #     )
+    #     # Simulate for a bit longer to see the full path
+    #     trajectory = plot_sim.get_trajectory(duration=runner.max_duration / 2)
+    #     plot_sim.bounce_locations = results_simlm.get(
+    #         "bounce_locations", []
+    #     )  # Add bounces back for plot
+    #     plot_sim.plot_trajectory(trajectory, title=f"SimLM Final Trajectory")
+
+    # print("\nExperiment Runs Complete.")

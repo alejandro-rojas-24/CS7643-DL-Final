@@ -6,7 +6,6 @@ import pymunk
 import numpy as np
 import matplotlib.pyplot as plt
 import time
-from config import SIM_MAX_DURATION
 
 from abc import ABC, abstractmethod
 import pybullet as p
@@ -27,7 +26,7 @@ class BaseProjectileSimulator(ABC):
         pass
 
 
-class ProjectileSimulator:
+class ProjectileSimulator(BaseProjectileSimulator):
     def __init__(self, fps=1000, gravity_y=-9.81):
         """
         Initialize the projectile simulator environment
@@ -40,34 +39,64 @@ class ProjectileSimulator:
         self.dt = 1.0 / fps
         self.gravity = (0, gravity_y)
         self.ball_collision_type = 1
-        self.ground_collision_type = 1
+        self.ground_collision_type = 2
         self._setup_space()
         self.bounce_locations = []
-        self.projectile_body = None  # Keep track of the projectile
+        self.trajectory_points = []
+        self.ball_is_touching_ground = False 
+        self.projectile_body = None  
 
     def _setup_space(self):
         """Initializes or resets the pymunk space and collision handler."""
         self.space = pymunk.Space()
         self.space.gravity = self.gravity
         self.bounce_locations = []
+        self.trajectory_points = []
+        self.ball_is_touching_ground = False 
 
         # Collision handler to detect bounces
         handler = self.space.add_collision_handler(
             self.ball_collision_type,
             self.ground_collision_type)
-        handler.post_solve = self._log_bounce
+        handler.begin = self._log_bounce
+        handler.separate = self._ball_leaves_ground
+
 
     def _log_bounce(self, arbiter, space, data):
-        """Callback function to record bounce locations."""
-        # Ensure the collision involves the projectile
-        if self.projectile_body and (
-            arbiter.shapes[0].body == self.projectile_body
-            or arbiter.shapes[1].body == self.projectile_body
-        ):
-            # Get the contact point(s)
-            contact_point = arbiter.contact_point_set.points[0].point_a
-            self.bounce_locations.append(contact_point.x)
-            print(f"Debug: Bounce detected at x={contact_point.x:.2f}")
+        """Callback function called when a bounce BEGINS."""
+        ball_body = None
+        shape1, shape2 = arbiter.shapes
+        if shape1.collision_type == self.ball_collision_type and shape1.body == self.projectile_body:
+            ball_body = shape1.body
+        elif shape2.collision_type == self.ball_collision_type and shape2.body == self.projectile_body:
+            ball_body = shape2.body
+
+        if ball_body is not None:
+            if not self.ball_is_touching_ground:
+                # Only log if we are transitioning *to* touching state
+                current_bounce_x = ball_body.position.x
+                self.bounce_locations.append(current_bounce_x)
+                print(f"Debug: Bounce STARTED and LOGGED at x={current_bounce_x:.2f}")
+
+                self.ball_is_touching_ground = True
+
+        return True
+
+
+    def _ball_leaves_ground(self, arbiter, space, data):
+        """Callback function called when ball SEPARATES from ground."""
+        ball_body = None
+        shape1, shape2 = arbiter.shapes
+        if shape1.collision_type == self.ball_collision_type and shape1.body == self.projectile_body:
+            ball_body = shape1.body
+        elif shape2.collision_type == self.ball_collision_type and shape2.body == self.projectile_body:
+            ball_body = shape2.body
+
+        if ball_body is not None:
+            # Reset the flag when the ball leaves the ground
+            self.ball_is_touching_ground = False
+
+        return True 
 
     def add_ground(
         self, x_min, x_max, step_size, y_func, friction=0.8
@@ -94,6 +123,7 @@ class ProjectileSimulator:
                 radius=0.01,
             )
             segment.friction = friction
+            segment.elasticity = 1.0
             segment.collision_type = self.ground_collision_type
             self.space.add(segment)
         # For plotting later
@@ -129,6 +159,7 @@ class ProjectileSimulator:
             )
             initial_height = radius
 
+        self.radius = radius
         # create projectile body
         moment = pymunk.moment_for_circle(mass, 0, radius)
         self.projectile_body = pymunk.Body(mass, moment)
@@ -157,7 +188,8 @@ class ProjectileSimulator:
             list: A list of x-coordinates (in meters) for each detected bounce.
                   Returns fewer bounces if max_duration is reached first.
         """
-        self.bounce_locations = []  # Reset bounces for this run
+        self.bounce_locations = [] 
+        self.trajectory_points = []
         steps = int(duration * self.fps)
         start_time = time.time()
 
@@ -166,92 +198,69 @@ class ProjectileSimulator:
             f"Debug: Initial position: {self.projectile_body.position}, velocity: {self.projectile_body.velocity}"
         )
 
+        self.trajectory_points.append(tuple(self.projectile_body.position))
+
         for step in range(steps):
             self.space.step(self.dt)
-            if len(self.bounce_locations) >= target_bounces:
+            self.trajectory_points.append(tuple(self.projectile_body.position))
+
+            if len(self.bounce_locations) >= target_bounces + 1: # adding a buffer just in case
                 print(
                     f"Debug: Reached target bounces ({target_bounces}) at step {step}."
                 )
                 break
-            # Check for projectile leaving bounds or stopping
             if (
-                self.projectile_body.position.y < -10
-            ):  # If it falls far below typical ground
-                print(f"Debug: Projectile fell out of bounds at step {step}.")
+                self.projectile_body.position.y < np.min(self.ground_y_vals) - (10 * self.radius) # Check relative to ground + buffer
+                 and self.projectile_body.velocity.y < 0 # Check if moving downwards significantly
+            ):
+                print(f"Debug: Projectile likely fell out of bounds at step {step}.")
                 break
 
         end_time = time.time()
         print(
             f"Debug: Simulation finished. Bounces recorded: {len(self.bounce_locations)}. Duration: {end_time - start_time:.2f}s"
         )
-        print(f"Debug: Final bounce locations: {self.bounce_locations}")
+        print(f"Debug: Final bounce locations (first three): {self.bounce_locations[:3]}")
 
-        return self.bounce_locations
+        return self.bounce_locations[:3]
 
-    def get_trajectory(self, duration):
+    def get_trajectory(self, duration=None):
         """
-        Simulates and returns the full trajectory for plotting/debugging.
-        Note: This runs a new simulation from the current state if called after simulate.
-              It's better to run this instead of simulate if you need the path.
-              We could modify simulate to also store trajectory points.
+        Returns the trajectory recorded during the last simulation run.
         """
-        # Re-setup space if needed, or ensure state is correct
-        # For simplicity, let's assume this is called on a freshly setup space
-        # This part needs careful state management if used interchangeably with run_simulation
-        if not self.projectile_body:
-            print("Error: Add projectile before getting trajectory.")
-            return []
+        if not self.trajectory_points:
+             print("Warning: No trajectory recorded. Run simulate() first.")
+        # Return a copy to prevent external modification
+        return list(self.trajectory_points)
+    
+   
+    def plot_trajectory(self, title="Projectile Trajectory"):
+        """Plots the last recorded trajectory and the ground."""
+        # *** Get trajectory from the stored points ***
+        positions = self.get_trajectory()
 
-        initial_pos = self.projectile_body.position
-        initial_vel = self.projectile_body.velocity
-
-        # Temporarily store current bounces and reset
-        original_bounces = list(self.bounce_locations)
-        self.bounce_locations = []
-
-        steps = int(duration * self.fps)
-        positions = []
-        current_pos = initial_pos
-        current_vel = initial_vel
-
-        for _ in range(steps):
-            self.space.step(self.dt)
-            positions.append(
-                self.projectile_body.position
-            )  # Get position of the *actual* body
-
-        # Restore original state (optional, depends on use case)
-        self.projectile_body.position = initial_pos
-        self.projectile_body.velocity = initial_vel
-        self.bounce_locations = original_bounces
-
-        return np.array(positions)
-
-    def plot_trajectory(self, positions, title="Projectile Trajectory"):
-        """Plots a recorded trajectory and the ground."""
-        if positions is None or len(positions) == 0:
-            print("No trajectory data to plot.")
+        if not positions: # Check if list is empty
+            print("No trajectory data to plot. Run simulate() first.")
             return
 
-        plt.figure(figsize=(10, 6))
+        plt.figure(figsize=(12, 7)) # Adjusted size slightly
         # Plot ground
         if hasattr(self, "ground_x_vals") and hasattr(self, "ground_y_vals"):
-            plt.plot(self.ground_x_vals, self.ground_y_vals, color="g", label="Ground")
+            plt.plot(self.ground_x_vals, self.ground_y_vals, color="g", linewidth=2, label="Ground") # Thicker line
         else:
             print("Warning: Ground data not available for plotting.")
 
         # Plot trajectory
-        positions = np.array(positions)
-        plt.plot(positions[:, 0], positions[:, 1], color="r", label="Projectile Path")
+        positions_np = np.array(positions) # Convert to numpy array for slicing
+        plt.plot(positions_np[:, 0], positions_np[:, 1], color="r", linestyle='-', marker='.', markersize=1, label="Projectile Path") # Added markers
 
         # Plot bounces if available
         if self.bounce_locations:
-            bounce_ys = [
-                self.ground_func(x) for x in self.bounce_locations
-            ]  # Approximate Y on ground
-            print(f"Debug: Final bounce locations: {self.bounce_locations}")
+             # Use the ground function to get approximate y for plotting bounces accurately
+            bounce_ys = [self.ground_func(x) for x in self.bounce_locations]
+            print(f"Plotting bounces at x={self.bounce_locations[:3]}, y={bounce_ys[:3]}")
             plt.scatter(
-                self.bounce_locations, bounce_ys, color="b", zorder=5, label="Bounces"
+                self.bounce_locations, bounce_ys, color="b", s=50, zorder=5, label="Bounces" # Made markers bigger
             )
 
         plt.xlabel("X position (m)")
@@ -261,15 +270,31 @@ class ProjectileSimulator:
         plt.grid(True)
         plt.axis("equal")
 
-        # Adjust limits dynamically based on trajectory
-        if len(positions) > 0:
-            x_min_traj, x_max_traj = np.min(positions[:, 0]), np.max(positions[:, 0])
-            y_min_traj, y_max_traj = np.min(positions[:, 1]), np.max(positions[:, 1])
-            plt.xlim(
-                min(self.ground_x_vals.min(), x_min_traj - 5),
-                max(self.ground_x_vals.max(), x_max_traj + 5),
-            )
-            plt.ylim(min(self.ground_y_vals.min(), y_min_traj - 5), max(y_max_traj + 5))
+        # Adjust limits dynamically based on trajectory AND ground
+        if len(positions_np) > 0:
+            x_min_traj, x_max_traj = np.min(positions_np[:, 0]), np.max(positions_np[:, 0])
+            y_min_traj, y_max_traj = np.min(positions_np[:, 1]), np.max(positions_np[:, 1])
+
+            # Consider ground bounds as well
+            x_min_plot = min(self.ground_x_vals.min(), x_min_traj) - 1 # Add padding
+            x_max_plot = max(self.ground_x_vals.max(), x_max_traj) + 1
+            y_min_plot = min(self.ground_y_vals.min(), y_min_traj) - 1
+            y_max_plot = max(self.ground_y_vals.max(), y_max_traj) + 1
+
+            # Ensure y_max_plot includes initial height if higher than peak trajectory
+            if self.projectile_body:
+                 initial_height = self.projectile_body.position.y # Or store initial height separately
+                 y_max_plot = max(y_max_plot, initial_height + 1)
+
+
+            plt.xlim(x_min_plot, x_max_plot)
+            plt.ylim(y_min_plot, y_max_plot)
+        else:
+             # Fallback if no trajectory
+             if hasattr(self, "ground_x_vals"):
+                 plt.xlim(self.ground_x_vals.min() -1, self.ground_x_vals.max() + 1)
+                 plt.ylim(self.ground_y_vals.min() - 1, self.ground_y_vals.max() + 10) # Guess a reasonable upper limit
+
 
         plt.show()
 
