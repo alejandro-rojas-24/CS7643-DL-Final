@@ -63,7 +63,7 @@ if __name__ == "__main__":
     if experiment == "interpolated":
         print("\nExperiment C: Varying Difficulty")
         difficulty = config.get("difficulty", 0.5)
-        interpol_ground = InterpolatedGround(difficulty)
+        ground = InterpolatedGround(difficulty)
 
     results_cot = runner.run_baseline_cot(ground, few_shot_examples_cot)
     save_results(results_cot)

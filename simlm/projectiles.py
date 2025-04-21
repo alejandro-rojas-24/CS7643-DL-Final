@@ -76,7 +76,6 @@ class ProjectileSimulator(BaseProjectileSimulator):
                 # Only log if we are transitioning *to* touching state
                 current_bounce_x = ball_body.position.x
                 self.bounce_locations.append(current_bounce_x)
-                print(f"Debug: Bounce STARTED and LOGGED at x={current_bounce_x:.2f}")
 
                 self.ball_is_touching_ground = True
 
@@ -258,7 +257,6 @@ class ProjectileSimulator(BaseProjectileSimulator):
         if self.bounce_locations:
              # Use the ground function to get approximate y for plotting bounces accurately
             bounce_ys = [self.ground_func(x) for x in self.bounce_locations]
-            print(f"Plotting bounces at x={self.bounce_locations[:3]}, y={bounce_ys[:3]}")
             plt.scatter(
                 self.bounce_locations, bounce_ys, color="b", s=50, zorder=5, label="Bounces" # Made markers bigger
             )

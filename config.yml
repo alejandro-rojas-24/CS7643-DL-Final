@@ -1,6 +1,6 @@
 # Experiment:
-experiment: "sine" # "flat" "sine" "interpolated"
-visualize: false
+experiment: "interpolated" # "flat" "sine" "interpolated"
+visualize: true
 few_shot_examples_path: "examples/few_shot_data.yaml"
 target_distance: 50.0
 target_bounce_number: 3
@@ -26,4 +26,4 @@ step: 0.1
 friction: 0.8
 amplitude: 1
 frequency: 0.5
-difficulty: 0.5
+difficulty: 0.9
