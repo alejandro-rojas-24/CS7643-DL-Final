@@ -204,7 +204,7 @@ class ProjectileSimulator(BaseProjectileSimulator):
             self.space.step(self.dt)
             self.trajectory_points.append(tuple(self.projectile_body.position))
 
-            if len(self.bounce_locations) >= target_bounces + 1: # adding a buffer just in case
+            if len(self.bounce_locations) >= target_bounces: 
                 print(
                     f"Debug: Reached target bounces ({target_bounces}) at step {step}."
                 )

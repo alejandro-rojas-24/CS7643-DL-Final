@@ -72,8 +72,8 @@ if __name__ == "__main__":
 
     # Plot final trajectory for the last SimLM run
     if (
-        results_simlm
-        and results_simlm.get("success")
+        config.get("visualize", False)
+        and results_simlm
         and "final_h" in results_simlm
         and "final_v" in results_simlm # Added check for final_v for safety
     ):
