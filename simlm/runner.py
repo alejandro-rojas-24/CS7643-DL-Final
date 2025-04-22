@@ -1,10 +1,12 @@
+import logging
 import os
 import time
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
-from simlm.ground import Ground
-from simlm.llm_interface import get_llm_response, parse_llm_json_output
+from simlm.config import Config
+from simlm.ground import FlatGround, Ground, InterpolatedGround, SineGround
+from simlm.llm import LLMClient
 from simlm.projectiles import ProjectileSimulator
 
 # Jinja Setup
@@ -15,6 +17,8 @@ jinja_env = Environment(
     trim_blocks=True,
     lstrip_blocks=True,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def ordinal(n: int) -> str:
@@ -39,31 +43,50 @@ def calculate_error(bounce_locations, target_bounce_num, target_dist):
 
 
 class SimLMRunner:
-    def __init__(self, config: dict) -> None:
-
+    def __init__(self, config: Config) -> None:
         # LLM
-        self.model_identifier = config.get("model", "gpt-3.5-turbo")
-        self.temperature = config.get("temperature", 0.5)
+        self.model_service = config.llm.service
+        self.model_name = config.llm.model_name
+        self.temperature = config.llm.temperature
 
         # Simulation
-        self.fps = config.get("fps", 1000)
-        self.gravity_y = config.get("gravity_y", -9.81)
-        self.max_duration = config.get("max_duration", 20)
-        self.elasticity = config.get("elasticity", 0.9)
-        self.mass = config.get("mass", 1.0)
-        self.radius = config.get("radius", 0.05)
-        self.simulator = ProjectileSimulator(fps=self.fps, gravity_y=self.gravity_y)
+        self.fps = config.simulation.fps
+        self.gravity_y = config.simulation.gravity.y
+        self.max_duration = config.simulation.max_duration
+        self.elasticity = config.projectile.elasticity
+        self.mass = config.projectile.mass
+        self.radius = config.projectile.radius
+        self.simulator = ProjectileSimulator(
+            fps=self.fps,
+            gravity_y=self.gravity_y,
+        )
         # Ground
-        self.x_min = config.get("x_min", -10.0)
-        self.x_max = config.get("x_max", 100.0)
-        self.step = config.get("step", 0.1)
-        self.friction = config.get("friction", 0.8)
+        self.x_min = config.ground.x_min
+        self.x_max = config.ground.x_max
+        self.step = config.ground.step
+        self.friction = config.ground.friction
+
+        self.ground_type = config.ground.type
+        if self.ground_type == "flat":
+            self.ground = FlatGround()
+
+        # Experiment B: Uneven Sinusoid Ground
+        elif self.ground_type == "sine":
+            self.ground = SineGround(
+                config.ground.amplitude,
+                config.ground.frequency,
+            )
+
+        # Experiment C: Varying Difficulty
+        elif self.ground_type == "interpolated":
+            difficulty = config.ground.difficulty
+            self.ground = InterpolatedGround(difficulty)
 
         # Experiment
-        self.distance = config.get("target_distance", 50.0)
-        self.bounce_number = config.get("target_bounce_number", 3)
-        self.tolerance = config.get("target_tolerance", 1.0)
-        self.max_iterations = config.get("max_iterations", 5)
+        self.distance = config.experiment.target_distance
+        self.bounce_number = config.experiment.target_bounce_number
+        self.tolerance = config.experiment.tolerance
+        self.max_iterations = config.experiment.max_iterations
 
     def _run_simulation(self, h, v, ground: Ground):
         """Sets up and runs a single simulation instance."""
@@ -76,16 +99,22 @@ class SimLMRunner:
             ground,
             self.friction,
         )
-        self.simulator.add_projectile(h, v, self.mass, self.radius, self.elasticity)
+        self.simulator.add_projectile(
+            h,
+            v,
+            self.mass,
+            self.radius,
+            self.elasticity,
+        )
         bounce_locs = self.simulator.simulate(
             target_bounces=self.bounce_number,
             duration=self.max_duration,
         )
         return bounce_locs
 
-    def run_baseline_cot(self, ground: Ground, few_shot_examples=None):
+    def run_baseline_cot(self, few_shot_examples=None):
         """Runs the baseline Chain-of-Thought method."""
-        print(f"\nRunning Baseline CoT for {ground}")
+        print(f"\nRunning Baseline CoT for {self.ground}")
         start_time = time.time()
 
         template = jinja_env.get_template("cot_prompt.j2")
@@ -96,27 +125,34 @@ class SimLMRunner:
             target_distance=self.distance,
             target_tolerance=self.tolerance,
             examples=few_shot_examples,
-            ground_description=str(ground),
+            ground_description=self.ground.description,
         )
 
-        raw_response = get_llm_response(self.model_identifier, prompt, self.temperature)
-        parsed_data = parse_llm_json_output(raw_response)
+        client = LLMClient.from_model_service(
+            self.model_service,
+            self.model_name,
+        )
 
-        if (
-            not parsed_data
-            or "height" not in parsed_data
-            or "horizontal_velocity" not in parsed_data
-        ):
-            print("Error: Failed to get valid parameters from LLM.")
-            return {"success": False, "error": "LLM Parsing Failed"}
+        data = client.generate_and_parse(
+            prompt=prompt,
+            temperature=self.temperature,
+        )
 
-        h = parsed_data["height"]
-        v = parsed_data["horizontal_velocity"]
-        reasoning = parsed_data.get("reasoning", "N/A")
+        if not data:
+            logger.error("Failed to get valid parameters from LLM.")
+            return {
+                "success": False,
+                "error": "LLM Parsing Failed",
+                "model": self.model_name,
+            }
+
+        h = data.height
+        v = data.horizontal_velocity
+        reasoning = data.reasoning
         print(f"LLM Proposed: h={h:.2f}m, v={v:.2f}m/s")
         print(f"LLM Reasoning: {reasoning}")
 
-        bounce_locs = self._run_simulation(h, v, ground)
+        bounce_locs = self._run_simulation(h, v, self.ground)
         actual_dist, error = calculate_error(
             bounce_locs, self.bounce_number, self.distance
         )
@@ -125,10 +161,12 @@ class SimLMRunner:
         result = {
             "success": error is not None and error <= self.tolerance,
             "strategy": "CoT",
-            "model": self.model_identifier,
-            "ground": str(ground),
+            "model": self.model_name,
+            "ground": str(self.ground),
             "predicted_h": h,
             "predicted_v": v,
+            "final_h": h,
+            "final_v": v,
             "reasoning": reasoning,
             "bounce_locations": bounce_locs,
             "actual_distance_bounce_3": actual_dist,
@@ -144,13 +182,11 @@ class SimLMRunner:
         print(f"Finished CoT in {result['time_taken']:.2f}s")
         return result
 
-    def run_simlm(self, ground: Ground, few_shot_examples=None):
+    def run_simlm(self, few_shot_examples=None):
         """Runs the SimLM iterative method."""
-        print(f"\nRunning SimLM for {ground}")
+        print(f"\nRunning SimLM for {self.ground}")
         start_time = time.time()
-        history = (
-            []
-        )  # Stores dicts for each step: {'type': 'reasoning'/'simulation'/'critique', ...}
+        history = []  # Stores dicts for each step: {'type': 'reasoning'/'simulation'/'critique', ...}
         current_h, current_v = None, None
 
         for iteration in range(self.max_iterations):
@@ -166,9 +202,8 @@ class SimLMRunner:
                     target_distance=self.distance,
                     target_tolerance=self.tolerance,
                     examples=few_shot_examples,
-                    ground_description=str(ground),
+                    ground_description=self.ground.description,
                 )
-                expected_keys = ["reasoning", "height", "horizontal_velocity"]
                 step_type = "reasoning"
             else:
                 template = jinja_env.get_template("critique_prompt.j2")
@@ -178,41 +213,42 @@ class SimLMRunner:
                     target_bounce_number=self.bounce_number,
                     target_distance=self.distance,
                     target_tolerance=self.tolerance,
-                    ground_description=str(ground),
+                    ground_description=self.ground.description,
                     history=history,  # Pass the whole history
                 )
-                expected_keys = ["critique", "height", "horizontal_velocity"]
                 step_type = "critique"
 
-            # Call LLM
-            raw_response = get_llm_response(
-                self.model_identifier, prompt, self.temperature
+            # 2. Call LLM
+            client = LLMClient.from_model_service(
+                self.model_service,
+                self.model_name,
             )
-            parsed_data = parse_llm_json_output(raw_response)
+            data = client.generate_and_parse(
+                prompt=prompt,
+                temperature=self.temperature,
+            )
 
-            if not parsed_data or not all(key in parsed_data for key in expected_keys):
-                print(
+            if not data:
+                logger.error(
                     f"Error: Failed to get valid {step_type} and parameters from LLM on iteration {iteration + 1}."
                 )
                 final_error = (
-                    history[-1]["error"] if history and "error" in history[-1] else None
+                    history[-1]["error"]
+                    if history and "error" in history[-1]
+                    else None
                 )
-                success_flag = final_error is not None and final_error <= self.tolerance
+                success_flag = (
+                    final_error is not None and final_error <= self.tolerance
+                )
                 return {
                     "success": success_flag,
                     "error": f"LLM Parsing Failed Iter {iteration + 1}",
                     "history": history,
                 }
 
-            current_h = parsed_data["height"]
-            current_v = parsed_data["horizontal_velocity"]
-            text_content = parsed_data.get("reasoning") or parsed_data.get(
-                "critique", "N/A"
-            )
-            print(
-                f"LLM {step_type.capitalize()}: h={current_h:.2f}m, v={current_v:.2f}m/s"
-            )
-            print(f"LLM Text: {text_content}")
+            current_h = data.height
+            current_v = data.horizontal_velocity
+            text_content = data.reasoning or data.critique
 
             history.append(
                 {
@@ -225,7 +261,9 @@ class SimLMRunner:
             )
 
             # Run Simulation
-            bounce_locs = self._run_simulation(current_h, current_v, ground)
+            bounce_locs = self._run_simulation(
+                current_h, current_v, self.ground
+            )
             actual_dist, error = calculate_error(
                 bounce_locs,
                 self.bounce_number,
@@ -258,7 +296,9 @@ class SimLMRunner:
         # End of loop or break
         end_time = time.time()
         final_error = (
-            history[-1]["error"] if history and "error" in history[-1] else None
+            history[-1]["error"]
+            if history and "error" in history[-1]
+            else None
         )
         final_dist = (
             history[-1]["actual_dist"]
@@ -271,15 +311,18 @@ class SimLMRunner:
             else []
         )
 
-        success_flag = final_error is not None and final_error <= self.tolerance
+        success_flag = (
+            final_error is not None and final_error <= self.tolerance
+        )
 
         result = {
             "success": success_flag,
             "strategy": "SimLM",
-            "model": self.model_identifier,
-            "ground": str(ground),
+            "model": self.model_name,
+            "ground": str(self.ground),
             # Estimate based on steps stored
-            "iterations_run": len(history) // 3 + (1 if len(history) % 3 > 0 else 0),
+            "iterations_run": len(history) // 3
+            + (1 if len(history) % 3 > 0 else 0),
             "final_h": current_h,
             "final_v": current_v,
             "bounce_locations": final_bounces,

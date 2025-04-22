@@ -1,29 +1,39 @@
-# Experiment:
-experiment: "interpolated" # "flat" "sine" "interpolated"
-visualize: true
-few_shot_examples_path: "examples/few_shot_data.yaml"
-target_distance: 50.0
-target_bounce_number: 3
-target_tolerance: 1
-max_iterations: 5
+########### Experiment Configuration ###########
+experiment:
+  type: "simlm"  # Options: "baseline_cot", "simlm"
+  visualize: true
+  save: true
+  few_shot_examples_path: "examples/few_shot_data.yaml"
+  target_distance: 50.0
+  target_bounce_number: 3
+  tolerance: 1.0
+  max_iterations: 5
 
-# LLM
-model: "gpt-3.5-turbo" # "ollama/llama2" "google/gemini-2.0-flash-lite"
-temperature: 0.5
+########### Simulation Parameters ###########
+simulation:
+  fps: 1000
+  max_duration: 20
+  gravity:
+    y: -9.81
 
-# Simulation:
-fps: 1000
-gravity_y: -9.81
-max_duration: 20
-elasticity: 0.9
-mass: 1.0
-radius: 0.05
+projectile:
+  elasticity: 0.9
+  mass: 1.0
+  radius: 0.05
 
-# Ground
-x_min: -200
-x_max: 400
-step: 0.1
-friction: 0.8
-amplitude: 1
-frequency: 0.5
-difficulty: 0.9
+########### Ground Configuration ###########
+ground:
+  type: "flat"  # Options: "flat", "sine", "interpolated"
+  friction: 0.8
+  x_min: -200
+  x_max: 400
+  step: 0.1
+  amplitude: 1
+  frequency: 0.5
+  difficulty: 0.9
+
+########### LLM Configuration ###########
+llm:
+  service: "google"  # Options: "google", "ollama", "openai"
+  model_name: "gemini-2.0-flash-lite"  # Options: "gemini-2.0-flash-lite", "llama2", "gpt-3.5-turbo"
+  temperature: 0.0
