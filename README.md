@@ -55,6 +55,29 @@ All required Python packages are listed in `requirements.txt`.
 
 ## Usage
 
+### Environment Setup
+
+We recommend using a virtual environment to manage dependencies.
+Specifically conda is recommended to manage the dependencies for this project if
+using python 3.10 or higher.
+
+An environment file is provided in the `environment.yaml` file. To create and activate the
+environment, run the following commands:
+
+```bash
+conda env create -f environment.yaml
+conda activate cs7643-dl-final
+```
+
+To deactivate the environment, run:
+
+```bash
+conda deactivate
+```
+
+
+### Running Experiments
+
 The main script to run experiments is `main.py`.
 
 1. **Configure the desired model:** Edit the `model` variable found within the `config.yml`. Examples:
@@ -81,7 +104,7 @@ The main script to run experiments is `main.py`.
     difficulty: 0.5
     ```
 
-## Ollama Docker Usage
+### Ollama Docker Usage
 
 First, ensure [Docker Desktop is installed](https://docs.docker.com/desktop/)
 and running.

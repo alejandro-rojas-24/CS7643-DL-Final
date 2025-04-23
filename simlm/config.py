@@ -52,10 +52,24 @@ class ProjectileConfig(BaseModel):
     radius: float = 0.05
 
 
+class EasyGroundConfig(BaseModel):
+    """Configuration for easy ground properties."""
+
+    amplitude: float = 1
+    frequency: float = 0.5
+
+
+class HardGroundConfig(BaseModel):
+    """Configuration for hard ground properties."""
+
+    amplitudes: list[float] | float = [0.6, 0.15, 0.05]
+    frequencies: list[float] | float = [0.9, 2.25, 4.5]
+
+
 class GroundConfig(BaseModel):
     """Configuration for ground properties."""
 
-    type: str = "flat"
+    type: Literal["flat", "sine", "interpolated"] = "flat"
     friction: float = 0.8
     x_min: int = -200
     x_max: int = 400
@@ -63,6 +77,8 @@ class GroundConfig(BaseModel):
     amplitude: float = 1
     frequency: float = 0.5
     difficulty: float = 0.9
+    easy: EasyGroundConfig = Field(default_factory=EasyGroundConfig)
+    hard: HardGroundConfig = Field(default_factory=HardGroundConfig)
 
 
 class Config(BaseModel):

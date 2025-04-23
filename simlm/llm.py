@@ -127,7 +127,10 @@ class OpenAIClient(LLMClient):
     """Client for OpenAI's LLM API."""
 
     def __init__(
-        self, model_name: str, api_key: str | None = None, **kwargs
+        self,
+        model_name: str,
+        api_key: str | None = None,
+        **kwargs,
     ) -> None:
         """
         Initialize the OpenAI client.
@@ -250,7 +253,11 @@ class OllamaClient(LLMClient):
     """Client for local Ollama API."""
 
     def __init__(
-        self, model_name: str, base_url: str | None = None, **kwargs
+        self,
+        model_name: str,
+        base_url: str | None = None,
+        timeout: int = 10,
+        **kwargs,
     ) -> None:
         """
         Initialize the Ollama client.
@@ -264,8 +271,13 @@ class OllamaClient(LLMClient):
         self.base_url = base_url or os.getenv(
             "OLLAMA_BASE_URL", "http://localhost:11434"
         )
-        self.client = ollama.Client(host=self.base_url)
+        self.client = ollama.Client(host=self.base_url, timeout=timeout)
 
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_fixed(5),
+        reraise=True,
+    )
     def _call_ollama_api(
         self, model: str, prompt: str, temperature: float
     ) -> GenerateResponse:

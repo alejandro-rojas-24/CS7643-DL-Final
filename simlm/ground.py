@@ -213,10 +213,10 @@ class HardGround(Ground):
 
     def __init__(
         self,
-        amplitudes: list[float] | NDArray[np.float64] = np.array(
+        amplitudes: list[float] | NDArray[np.float64] | float = np.array(
             [0.6, 0.15, 0.05]
         ),
-        frequencies: list[float] | NDArray[np.float64] = np.array(
+        frequencies: list[float] | NDArray[np.float64] | float = np.array(
             [0.9, 2.25, 4.5]
         ),
     ) -> None:
@@ -232,6 +232,10 @@ class HardGround(Ground):
         """
         # Ensure amplitudes and frequencies are numpy arrays and have
         # the same shape
+        if isinstance(amplitudes, float):
+            amplitudes = [amplitudes]
+        if isinstance(frequencies, float):
+            frequencies = [frequencies]
         if isinstance(amplitudes, list):
             amplitudes = np.array(amplitudes, dtype=np.float64)
         if isinstance(frequencies, list):

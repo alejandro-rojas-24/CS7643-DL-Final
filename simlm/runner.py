@@ -5,7 +5,14 @@ import time
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from simlm.config import Config
-from simlm.ground import FlatGround, Ground, InterpolatedGround, SineGround
+from simlm.ground import (
+    EasyGround,
+    FlatGround,
+    Ground,
+    HardGround,
+    InterpolatedGround,
+    SineGround,
+)
 from simlm.llm import LLMClient
 from simlm.projectiles import ProjectileSimulator
 
@@ -44,6 +51,7 @@ def calculate_error(bounce_locations, target_bounce_num, target_dist):
 
 class SimLMRunner:
     def __init__(self, config: Config) -> None:
+        self.config = config
         # LLM
         self.model_service = config.llm.service
         self.model_name = config.llm.model_name
@@ -80,7 +88,19 @@ class SimLMRunner:
         # Experiment C: Varying Difficulty
         elif self.ground_type == "interpolated":
             difficulty = config.ground.difficulty
-            self.ground = InterpolatedGround(difficulty)
+            easy_ground = EasyGround(
+                config.ground.easy.amplitude,
+                config.ground.easy.frequency,
+            )
+            hard_ground = HardGround(
+                config.ground.hard.amplitudes,
+                config.ground.hard.frequencies,
+            )
+            self.ground = InterpolatedGround(
+                difficulty=difficulty,
+                easy_ground=easy_ground,
+                hard_ground=hard_ground,
+            )
 
         # Experiment
         self.distance = config.experiment.target_distance
@@ -142,6 +162,7 @@ class SimLMRunner:
             logger.error("Failed to get valid parameters from LLM.")
             return {
                 "success": False,
+                "config": self.config.model_dump(),
                 "error": "LLM Parsing Failed",
                 "model": self.model_name,
             }
@@ -160,9 +181,7 @@ class SimLMRunner:
         end_time = time.time()
         result = {
             "success": error is not None and error <= self.tolerance,
-            "strategy": "CoT",
-            "model": self.model_name,
-            "ground": str(self.ground),
+            "config": self.config.model_dump(),
             "predicted_h": h,
             "predicted_v": v,
             "final_h": h,
@@ -242,6 +261,7 @@ class SimLMRunner:
                 )
                 return {
                     "success": success_flag,
+                    "config": self.config.model_dump(),
                     "error": f"LLM Parsing Failed Iter {iteration + 1}",
                     "history": history,
                 }
@@ -317,9 +337,7 @@ class SimLMRunner:
 
         result = {
             "success": success_flag,
-            "strategy": "SimLM",
-            "model": self.model_name,
-            "ground": str(self.ground),
+            "config": self.config.model_dump(),
             # Estimate based on steps stored
             "iterations_run": len(history) // 3
             + (1 if len(history) % 3 > 0 else 0),
