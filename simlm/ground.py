@@ -281,10 +281,8 @@ class InterpolatedGround(Ground):
     def description(self) -> str:
         """Return a description of the ground type."""
         return (
-            "An interpolated ground with difficulty with a mixture of "
-            f"{1 - self.difficulty} easy and {self.difficulty} hard surfaces.\n"
-            f"Easy ground: {self.easy_ground.description}.\n"
-            f"Hard ground: {self.hard_ground.description}."
+            f"An interpolated ground with a mixture of {1 - self.difficulty} easy and {self.difficulty} hard surfaces. "
+            f"(Easy: {self.easy_ground.description}, Hard: {self.hard_ground.description})"
         )
 
     def __init__(

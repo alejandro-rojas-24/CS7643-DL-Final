@@ -128,7 +128,7 @@ and confirm ollama is running.
 Running
 
 ```bash
-python main.py --config.yml
+python main.py --config config.yml
 ```
 
 will automatically connect to the locally running server.
@@ -189,7 +189,7 @@ from OpenAI.
 | `llama3.2:3b` | 3 billion | 2.8GB | Llama 3.2 model from Meta |
 | `deepseek-r1:1.5b` | 1.5 billion | 1.2GB | DeepSeek's first-generation of reasoning models with comparable performance to OpenAI-o1. |
 | `deepseek-r1:7b` | 7 billion | 4.7GB | DeepSeek's first-generation of reasoning models with comparable performance to OpenAI-o1. |
-| `deepskeek-r1:14b` | 14 billion | 9.0GB | DeepSeek's first-generation of reasoning models with comparable performance to OpenAI-o1. |
+| `deepseek-r1:14b` | 14 billion | 9.0GB | DeepSeek's first-generation of reasoning models with comparable performance to OpenAI-o1. |
 | `deepseek-r1:32b` | 32 billion | 20GB | DeepSeek's first-generation of reasoning models with comparable performance to OpenAI-o1. |
 
 ### Recommended Google Models
