@@ -90,7 +90,11 @@ class FlatGround(Ground):
 
     Experiment A - Ground with constant zero height.
     """
-
+    @propertys
+    def description(self) -> str:
+        """Return a description of the ground type."""
+        return f"A flat ground characterized by y = 0 for all x."
+    
     def height(
         self,
         x: float | NDArray[np.float64],
