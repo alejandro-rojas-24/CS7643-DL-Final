@@ -161,6 +161,7 @@ class SimLMRunner:
         if not data:
             logger.error("Failed to get valid parameters from LLM.")
             return {
+                "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
                 "success": False,
                 "config": self.config.model_dump(),
                 "error": "LLM Parsing Failed",
@@ -180,6 +181,7 @@ class SimLMRunner:
 
         end_time = time.time()
         result = {
+            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
             "success": error is not None and error <= self.tolerance,
             "config": self.config.model_dump(),
             "predicted_h": h,
@@ -260,6 +262,7 @@ class SimLMRunner:
                     final_error is not None and final_error <= self.tolerance
                 )
                 return {
+                    "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
                     "success": success_flag,
                     "config": self.config.model_dump(),
                     "error": f"LLM Parsing Failed Iter {iteration + 1}",
@@ -336,6 +339,7 @@ class SimLMRunner:
         )
 
         result = {
+            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
             "success": success_flag,
             "config": self.config.model_dump(),
             # Estimate based on steps stored
