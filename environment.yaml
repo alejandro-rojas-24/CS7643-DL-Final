@@ -9,6 +9,7 @@ dependencies:
   - pymunk
   - pybullet
   - matplotlib
+  - seaborn
   - jinja2
   - python-dotenv
   - pyyaml
