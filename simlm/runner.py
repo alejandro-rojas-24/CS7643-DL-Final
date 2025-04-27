@@ -192,6 +192,7 @@ class SimLMRunner:
             "error": error,
             "within_tolerance": error is not None and error <= self.tolerance,
             "time_taken": end_time - start_time,
+            "few_shot_examples": few_shot_examples,
         }
         print(
             f"Result: Bounces={bounce_locs}, Target Bounce Dist={actual_dist:.2f}m, Error={error:.2f}m"
@@ -351,6 +352,8 @@ class SimLMRunner:
             "within_tolerance": success_flag,
             "history": history,
             "time_taken": end_time - start_time,
+            "few_shot_examples": few_shot_examples,
+
         }
         print(
             f"Finished SimLM in {result['time_taken']:.2f}s. Final Error: {final_error:.2f}m"
