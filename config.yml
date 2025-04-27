@@ -3,7 +3,7 @@ experiment:
   type: "simlm"  # Options: "baseline_cot", "simlm"
   visualize: true
   save: true
-  few_shot_examples_path: "examples/few_shot_data.yaml"
+  few_shot_examples_path: "results/experiment_results-2520.jsonl"
   target_distance: 50.0
   target_bounce_number: 3
   tolerance: 1.0

@@ -37,7 +37,7 @@ def load_examples(filepath, strategy_type, num_examples=3, success_only=True, fi
         return []
 
     potential_examples = []
-    print(f"Loading examples from: {filepath} for strategy: {strategy_type}")
+    print(f"\nLoading examples from: {filepath} for strategy: {strategy_type}")
     try:
         with open(filepath, 'r') as f:
             for i, line in enumerate(f):
@@ -83,7 +83,7 @@ def load_examples(filepath, strategy_type, num_examples=3, success_only=True, fi
                          continue 
 
                     # Formatting for CoT
-                    if strategy_type == 'cot':
+                    if strategy_type == 'baseline_cot':
                         reasoning = run_data.get('reasoning', 'No reasoning provided.')
                         answer_dict = {"height": float(final_h), "horizontal_velocity": float(final_v)}
                         answer_json_str = json.dumps(answer_dict, indent=2)
