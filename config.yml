@@ -42,4 +42,4 @@ ground:
 llm:
   service: "google"  # Options: "google", "ollama", "openai"
   model_name: "gemini-2.0-flash-lite"  # Options: "gemini-2.0-flash-lite", "llama2", "gpt-3.5-turbo"
-  temperature: 0.0
+  temperature: 0.5

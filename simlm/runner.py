@@ -184,8 +184,6 @@ class SimLMRunner:
             "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
             "success": error is not None and error <= self.tolerance,
             "config": self.config.model_dump(),
-            "predicted_h": h,
-            "predicted_v": v,
             "final_h": h,
             "final_v": v,
             "reasoning": reasoning,

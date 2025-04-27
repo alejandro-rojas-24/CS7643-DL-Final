@@ -29,6 +29,7 @@ def load_examples(filepath="examples/few_shot_data.yaml"):
     # Example structure expected by templates:
     # [ {'query': str, 'reasoning': str, 'answer_json': str}, ... ] for CoT
     # [ {'query': str, 'history': list_of_steps, 'final_answer_json': str, 'target': float}, ... ] for SimLM
+    
     raise NotImplementedError
 
 

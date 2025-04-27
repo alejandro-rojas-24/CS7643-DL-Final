@@ -12,18 +12,18 @@ def main() -> None:
     """Run the batch experiments."""
     experiment_types = ["baseline_cot", "simlm"]
     models = [
-        # ("openai", "gpt-3.5-turbo"),
-        # ("openai", "gpt-4.1-nano"),
-        # ("google", "gemini-2.0-flash"),
-        # ("google", "gemini-2.5-flash-preview-04-17"),
-        # ("google", "gemini-1.5-flash"),
-        # ("ollama", "gemma3:1b"),
-        # ("ollama", "gemma3:4b"),
+        ("openai", "gpt-3.5-turbo"),
+        ("openai", "gpt-4.1-nano"),
+        ("google", "gemini-2.0-flash"),
+        ("google", "gemini-2.5-flash-preview-04-17"),
+        ("google", "gemini-1.5-flash"),
+        ("ollama", "gemma3:1b"),
+        ("ollama", "gemma3:4b"),
         # ("ollama", "gemma3:12b"),
         # ("ollama", "gemma3:27b"),
         # ("ollama", "llama3.2:1b"),
         # ("ollama", "llama3.2:3b"),
-        ("ollama", "llama3.1:8b"),
+        # ("ollama", "llama3.1:8b"),
     ]
     flat_grounds = [{"type": "flat"}]
     sine_grounds = [{"type": "sine", "amplitude": 0.5, "frequency": 1.0}]
