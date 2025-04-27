@@ -11,12 +11,12 @@ class ExperimentConfig(BaseModel):
     type: Literal["baseline_cot", "simlm"] = "baseline_cot"
     visualize: bool = True
     save_results: bool = True
-    few_shot_examples_path: str | Path = "examples/few_shot_data.yaml"
+    few_shot_examples_path: str | Path = "results/experiment_results-1260.jsonl"
     target_distance: float = 50.0
     target_bounce_number: int = 3
     tolerance: int = 1
     max_iterations: int = 5
-
+    few_shot: int = 0
 
 class LLMConfig(BaseModel):
     """Configuration for the language model."""
