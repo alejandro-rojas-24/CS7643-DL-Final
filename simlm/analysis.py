@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-
+from scipy import stats 
 
 def load_and_process_results(filepath):
     data = []
@@ -291,3 +291,184 @@ def print_summary_stats(df):
 
     print(summary.to_string(index=False))
     print("-" * 50)
+
+def plot_simlm_cot_error_ratio(df, model_col='LLM Model Name', strategy_col='Strategy', error_col='Error'):
+    """Plots the ratio of SimLM error to COT error for different models."""
+    # calc mean error by model and strategy
+    mean_errors = df.groupby([model_col, strategy_col])[error_col].mean().unstack()
+
+    mean_errors.dropna(inplace=True)
+
+    print(mean_errors.head(5))
+
+    #calc error ratio
+    mean_errors['Error Ratio (SimLM/CoT)'] = mean_errors['SimLM'] / mean_errors['Baseline CoT']
+
+    plt.figure(figsize=(10, 6))
+    sns.barplot(x=mean_errors.index, y='Error Ratio (SimLM/CoT)', data=mean_errors)
+    plt.title('Error Ratio of SimLM to CoT by Model')
+    plt.xlabel('LLM Model')
+    plt.ylabel('Error Ratio (SimLM/CoT)')
+    plt.legend()
+    plt.xticks(rotation=30, ha='right')
+    plt.tight_layout()
+    plt.show()
+
+def plot_error_ratio_by_ground(df, model_col='LLM Model Name', strategy_col='Strategy', error_col='Error', ground_col='Ground Type'):
+    """Plots the ratio of SimLM error to CoT error across different LLM models and ground types."""
+    
+    mean_errors = df.groupby([model_col, strategy_col, ground_col])[error_col].mean().unstack(level=strategy_col)
+    
+    # Check what columns exist
+    expected_strategies = ['Baseline CoT', 'SimLM']
+    for strategy in expected_strategies:
+        if strategy not in mean_errors.columns:
+            raise KeyError(f"Missing expected strategy: {strategy}. Found strategies: {mean_errors.columns.tolist()}")
+
+    mean_errors = mean_errors.dropna()
+
+    mean_errors['Error Ratio (SimLM/CoT)'] = mean_errors['SimLM'] / mean_errors['Baseline CoT']
+    mean_errors = mean_errors.reset_index()
+
+    plt.figure(figsize=(12, 7))
+    sns.barplot(
+        data=mean_errors, 
+        x=model_col, 
+        y='Error Ratio (SimLM/CoT)', 
+        hue=ground_col, 
+        palette='viridis'
+    )
+    plt.axhline(1, linestyle='--', color='red', label='Parity Line (Ratio = 1)')
+    plt.title('Error Ratio (SimLM/CoT) by LLM Model and Ground Type')
+    plt.xlabel('LLM Model')
+    plt.ylabel('Error Ratio (SimLM / Baseline CoT)')
+    plt.legend(title='Ground Type', bbox_to_anchor=(1.05, 1), loc='upper left')
+    plt.xticks(rotation=30, ha='right')
+    plt.tight_layout(rect=[0, 0, 0.85, 1])
+    plt.show()
+
+def summarize_average_error_by_ground(df, model_col='LLM Model Name', ground_col='Ground Type', error_col='Error'):
+    """Creates a table of average error where rows are LLM models and columns are ground types."""
+    summary = df.groupby([model_col, ground_col])[error_col].mean().unstack()
+    summary = summary.dropna()
+    summary = summary.round(2)
+    print("\n--- Average Error by LLM Model and Ground Type ---")
+    #print(summary)
+    return summary
+
+def summarize_improvement_by_ground(df, model_col='LLM Model Name', ground_col='Ground Type', strategy_col='Strategy', error_col='Error'):
+    """Creates a table showing improvement (Baseline CoT error - SimLM error) by model and ground type."""
+    mean_errors = df.groupby([model_col, ground_col, strategy_col])[error_col].mean().unstack()
+    mean_errors['Improvement (m)'] = mean_errors['Baseline CoT'] - mean_errors['SimLM']
+    summary = mean_errors['Improvement (m)'].unstack()
+    summary = summary.dropna()
+    summary = summary.round(2)
+    print("\n--- Improvement (Baseline CoT - SimLM) by LLM Model and Ground Type ---")
+    #print(summary)
+    return summary
+
+def summarize_relative_improvement(df, model_col='LLM Model Name', ground_col='Ground Type', strategy_col='Strategy', error_col='Error'):
+    """Summarizes relative improvement percentage between Baseline CoT and SimLM."""
+    mean_errors = df.groupby([model_col, ground_col, strategy_col])[error_col].mean().unstack()
+    mean_errors['Relative Improvement (%)'] = (mean_errors['Baseline CoT'] - mean_errors['SimLM']) / mean_errors['Baseline CoT'] * 100
+    summary = mean_errors['Relative Improvement (%)'].unstack()
+    summary = summary.dropna()
+    summary = summary.round(1)
+    print("\n--- Relative Improvement (%) by LLM Model and Ground Type ---")
+    #print(summary)
+    return summary
+
+def plot_error_vs_ground_difficulty(df):
+    """Plots error as a function of ground difficulty for SimLM and CoT."""
+    exp_c_df = df[df['Ground Type'] == 'Interpolated'].copy()
+    if exp_c_df.empty:
+        print("No data found for 'Interpolated' ground type.")
+        return
+
+    plt.figure(figsize=(10, 6))
+    sns.lineplot(data=exp_c_df, x='Ground Difficulty', y='Error', hue='Strategy', marker='o')
+    plt.title('Error vs Ground Difficulty')
+    plt.xlabel('Ground Difficulty')
+    plt.ylabel('Mean Error (m)')
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()
+
+def summarize_failure_rate(df, error_threshold=20.0):
+    """Summarizes the failure rate (errors above threshold) for each LLM and strategy."""
+    df['Failure'] = df['Error'] > error_threshold
+    failure_summary = df.groupby(['LLM Model Name', 'Strategy'])['Failure'].mean() * 100
+    failure_summary = failure_summary.dropna()
+    failure_summary = failure_summary.round(1)
+    print("\n--- Failure Rate (%) by LLM Model and Strategy ---")
+    #print(failure_summary)
+    return failure_summary
+
+def plot_iterations_vs_error(df):
+    """Plots the number of iterations vs final error for SimLM."""
+    simlm_df = df[df['Strategy'] == 'SimLM']
+    plt.figure(figsize=(8, 6))
+    sns.scatterplot(data=simlm_df, x='Iterations Run', y='Error')
+    sns.regplot(data=simlm_df, x='Iterations Run', y='Error', scatter=False, color='red')
+    plt.title('Iterations vs Final Error (SimLM)')
+    plt.xlabel('Iterations Run')
+    plt.ylabel('Final Error (m)')
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()
+
+def plot_histogram_error_distribution(df, strategy_col='Strategy', error_col='Error'):
+    """ Histogram visual of error distribution by strategy"""
+    plt.figure(figsize=(10,6))
+    sns.histplot(data=df, x=error_col, hue=strategy_col, kde=True, bins=30)
+    plt.title('Error Distribution by Strategy')
+    plt.xlabel('Error (m)')
+    plt.ylabel('Frequency')
+    plt.tight_layout()
+    plt.show()
+
+def perform_statistical_tests(df, metric_col='Error', group_col='Experiment Condition', strategy_col='Strategy', strategy_1='Baseline CoT', strategy_2='SimLM', alpha=0.05):
+    """
+    Performs independent t-tests to compare a metric between two strategies
+    for each group defined by group_col.
+    """
+
+    print(f"\n--- Statistical Significance Tests ({strategy_1} vs {strategy_2} for {metric_col}) ---")
+    if group_col not in df.columns or strategy_col not in df.columns or metric_col not in df.columns:
+        print(f"Error: Required columns ('{group_col}', '{strategy_col}', '{metric_col}') not found.")
+        return
+
+    # Ensure strategies exist
+    if strategy_1 not in df[strategy_col].unique() or strategy_2 not in df[strategy_col].unique():
+         print(f"Warning: One or both strategies ('{strategy_1}', '{strategy_2}') not found in '{strategy_col}'. Skipping tests.")
+         return
+
+    unique_groups = df[group_col].unique()
+    results = []
+
+    for group in unique_groups:
+        print(f"\nTesting for Group: {group}")
+        group_df = df[df[group_col] == group]
+
+        data_1 = group_df[group_df[strategy_col] == strategy_1][metric_col].dropna()
+        data_2 = group_df[group_df[strategy_col] == strategy_2][metric_col].dropna()
+
+        if len(data_1) < 2 or len(data_2) < 2:
+            print(f"  Skipping: Insufficient data for one or both strategies (Need at least 2 data points).")
+            results.append({'Group': group, 'Stat': np.nan, 'P-Value': np.nan, 'Significant': 'N/A (Insufficient Data)', 'N1': len(data_1), 'N2': len(data_2)})
+            continue
+
+        # Perform independent t-test (assumes unequal variance by default with Welch's t-test)
+        t_stat, p_value = stats.ttest_ind(data_1, data_2, equal_var=False, nan_policy='omit')
+
+        is_significant = p_value < alpha
+        significance_str = f"Yes (p={p_value:.3g})" if is_significant else f"No (p={p_value:.3g})"
+
+        print(f"  {strategy_1} Mean {metric_col}: {data_1.mean():.3f} (N={len(data_1)})")
+        print(f"  {strategy_2} Mean {metric_col}: {data_2.mean():.3f} (N={len(data_2)})")
+        print(f"  T-statistic: {t_stat:.3f}, P-value: {p_value:.3g}")
+        print(f"  Difference significant at alpha={alpha}? {significance_str}")
+        results.append({'Group': group, 'Stat': t_stat, 'P-Value': p_value, 'Significant': significance_str, 'N1': len(data_1), 'N2': len(data_2)})
+
+    print("-" * 50)
+    return pd.DataFrame(results)
