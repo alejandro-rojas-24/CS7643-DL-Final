@@ -122,7 +122,7 @@ def plot_metric_distribution(df, metric_col, group_col, hue_col, title, yscale='
     plt.ylabel(metric_col.replace('_', ' ').title())
     if hue_col:
         plt.legend(title=hue_col.replace('_', ' ').title(), bbox_to_anchor=(1.05, 1), loc='upper left')
-    plt.xticks(rotation=15, ha='right')
+    plt.xticks(rotation=30, ha='right')
     plt.tight_layout(rect=[0, 0, 0.85 if hue_col else 1, 1])
     plt.show()
 
@@ -148,7 +148,7 @@ def plot_success_rate(df, group_col, hue_col, title):
     plt.ylim(0, 105) 
     if hue_col:
        plt.legend(title=hue_col.replace('_', ' ').title(), bbox_to_anchor=(1.05, 1), loc='upper left')
-    plt.xticks(rotation=15, ha='right')
+    plt.xticks(rotation=30, ha='right')
     plt.tight_layout(rect=[0, 0, 0.85 if hue_col else 1, 1]) # Adjust layout for legend
     plt.show()
 
@@ -180,31 +180,101 @@ def plot_metric_by_difficulty(df, metric_col, title):
     plt.show()
 
 def plot_iterations_histogram(df, title):
-    """Plots a histogram of iterations taken for SimLM runs."""
+    """
+    Plots a stacked histogram of iterations taken for SimLM runs,
+    grouped by experiment condition.
+
+    Args:
+        df (pd.DataFrame): DataFrame with experiment results, requiring columns:
+                           'Strategy', 'Iterations Run', 'Experiment Condition'.
+                           Optionally 'Max Iterations Allowed'.
+        title (str): The title for the plot.
+    """
+    # Filter for SimLM strategy results
     simlm_df = df[df['Strategy'] == 'SimLM'].copy()
+
+    # Check if there's any data to plot
     if simlm_df.empty:
         print("No SimLM data found for iteration histogram.")
         return
 
-    max_iter_allowed = df['Max Iterations Allowed'].iloc[0] # Assumes constant
-    bins = np.arange(1, max_iter_allowed + 2) - 0.5 # Center bins on integers
+    # --- Determine Max Iterations ---
+    # Try to get from column, otherwise infer from data or default
+    if 'Max Iterations Allowed' in df.columns:
+         # Use .iloc[0] assuming it's constant, handle potential NA
+         max_iter_allowed = pd.to_numeric(df['Max Iterations Allowed'].dropna().iloc[0], errors='coerce')
+         if pd.isna(max_iter_allowed):
+             max_iter_allowed = None # Fallback if conversion fails
+    else:
+         max_iter_allowed = None
 
+    # If not found in columns, infer from the actual iterations run
+    if max_iter_allowed is None and 'Iterations Run' in simlm_df.columns:
+        max_iter_allowed = pd.to_numeric(simlm_df['Iterations Run'].dropna().max(), errors='coerce')
+        if pd.isna(max_iter_allowed):
+             max_iter_allowed = None # Fallback if conversion fails
+
+    # Default if still unknown
+    if max_iter_allowed is None:
+        print("Warning: Could not determine Max Iterations Allowed. Defaulting to 5.")
+        max_iter_allowed = 5
+    else:
+        max_iter_allowed = int(max_iter_allowed) # Ensure it's an integer
+
+    # Define bins centered around integers
+    bins = np.arange(1, max_iter_allowed + 2) - 0.5
+
+    # --- Plotting ---
+    plt.style.use('seaborn-v0_8-whitegrid') # Example style
     plt.figure(figsize=(10, 6))
-    sns.histplot(
+
+    # Create the histogram using seaborn, assign to ax for legend control
+    ax = sns.histplot(
         data=simlm_df,
         x='Iterations Run',
-        hue='Experiment Condition', # Color by condition
-        multiple="stack", # Stack bars for different conditions
+        hue='Experiment Condition', # Let seaborn handle legend creation based on this
+        multiple="stack",          # Stack bars for different conditions
         bins=bins,
-        discrete=True,
-        shrink=0.8 # Add space between bars
+        # discrete=True, # Often helpful, but can sometimes interfere with bins/legend. Test compatibility.
+        palette='viridis',         # Use a distinct color palette
+        shrink=0.8                 # Adds a bit of space between bars
     )
-    plt.title(title)
-    plt.xlabel("Iterations Run by SimLM")
-    plt.ylabel("Number of Runs")
-    plt.xticks(np.arange(1, max_iter_allowed + 1)) # Ensure integer ticks
-    plt.legend(title='Experiment Condition', bbox_to_anchor=(1.05, 1), loc='upper left')
-    plt.tight_layout(rect=[0, 0, 0.85, 1]) # Adjust layout for legend
+
+    # --- Customize Plot ---
+    plt.title(title, fontsize=14)
+    plt.xlabel("Iterations Run by SimLM", fontsize=12)
+    plt.ylabel("Number of Runs", fontsize=12)
+
+    # Set x-axis ticks to be integers for iteration counts
+    plt.xticks(np.arange(1, max_iter_allowed + 1))
+    ax.tick_params(axis='both', which='major', labelsize=10)
+
+    # --- Handle Legend ---
+    # Get the legend object that seaborn *should* have created
+    legend = ax.get_legend()
+
+    if legend:
+        # Set the title for the legend explicitly
+        legend.set_title('Experiment Condition')
+        # Adjust legend position (place it outside the top right)
+        # bbox_to_anchor=(x, y) specifies the legend anchor point relative to axes
+        # loc specifies which part of the legend box is placed at the anchor point
+        plt.setp(legend, bbox_to_anchor=(1.03, 1), loc='upper left')
+    else:
+        # This case should be less likely now, but handle it just in case
+        print("Warning: Seaborn did not automatically create a legend. Attempting manual creation.")
+        # If seaborn failed, try plt.legend AFTER the plot command
+        try:
+            plt.legend(title='Experiment Condition', bbox_to_anchor=(1.03, 1), loc='upper left')
+        except Exception as e:
+             print(f"Manual legend creation also failed: {e}")
+
+
+    # Adjust layout to prevent legend overlapping plot elements
+    # rect=[left, bottom, right, top] in fractions of figure width/height
+    # Reduce 'right' to make space for the legend outside
+    plt.tight_layout(rect=[0, 0, 0.88, 1])
+
     plt.show()
 
 def print_summary_stats(df):

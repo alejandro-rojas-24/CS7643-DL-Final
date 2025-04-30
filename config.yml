@@ -3,7 +3,7 @@ experiment:
   type: "simlm"  # Options: "baseline_cot", "simlm"
   visualize: true
   save: true
-  few_shot_examples_path: "results/experiment_results-2520.jsonl"
+  few_shot_examples_path: "results/combined_results_v1.jsonl"
   target_distance: 50.0
   target_bounce_number: 3
   tolerance: 1.0
@@ -30,7 +30,7 @@ ground:
   step: 0.1
   amplitude: 1
   frequency: 0.5
-  difficulty: 0.9
+  difficulty: 0
   easy:
     amplitude: 0.15
     frequency: 0.25
