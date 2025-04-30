@@ -16,6 +16,8 @@ from simlm.ground import (
 from simlm.llm import LLMClient
 from simlm.projectiles import ProjectileSimulator
 
+logger = logging.getLogger(__name__)
+
 # Jinja Setup
 template_dir = os.path.join(os.path.dirname(__file__), "prompt_templates")
 jinja_env = Environment(
@@ -25,19 +27,15 @@ jinja_env = Environment(
     lstrip_blocks=True,
 )
 
-logger = logging.getLogger(__name__)
-
-
 def ordinal(n: int) -> str:
-    """Add ordinal number suffix"""
     if 11 <= (n % 100) <= 13:
         suffix = "th"
     else:
         suffix = ["th", "st", "nd", "rd", "th"][min(n % 10, 4)]
     return str(n) + suffix
 
-
 jinja_env.filters["ordinal"] = ordinal
+
 
 
 def calculate_error(bounce_locations, target_bounce_num, target_dist):
@@ -234,11 +232,11 @@ class SimLMRunner:
                     target_distance=self.distance,
                     target_tolerance=self.tolerance,
                     ground_description=self.ground.description,
-                    history=history,  # Pass the whole history
+                    history=history,  
                 )
                 step_type = "critique"
 
-            # 2. Call LLM
+            # Call LLM
             client = LLMClient.from_model_service(
                 self.model_service,
                 self.model_name,
@@ -313,7 +311,7 @@ class SimLMRunner:
                 print(
                     f"Success! Target achieved within tolerance at iteration {iteration + 1}."
                 )
-                break  # Exit loop on success
+                break  
 
         # End of loop or break
         end_time = time.time()
@@ -341,7 +339,6 @@ class SimLMRunner:
             "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
             "success": success_flag,
             "config": self.config.model_dump(),
-            # Estimate based on steps stored
             "iterations_run": len(history) // 3
             + (1 if len(history) % 3 > 0 else 0),
             "final_h": current_h,

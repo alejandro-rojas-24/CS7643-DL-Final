@@ -73,7 +73,7 @@ class ProjectileSimulator(BaseProjectileSimulator):
 
         if ball_body is not None:
             if not self.ball_is_touching_ground:
-                # Only log if we are transitioning *to* touching state
+                # Only log if we are transitioning to touching state
                 current_bounce_x = ball_body.position.x
                 self.bounce_locations.append(current_bounce_x)
 

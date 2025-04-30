@@ -1,5 +1,3 @@
-# Add this function to simlm/analysis.py
-
 import json
 import random
 from pathlib import Path
