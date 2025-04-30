@@ -5,46 +5,104 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from scipy import stats 
 
+
+
 def load_and_process_results(filepath):
+    """Loads results from JSON Lines file and processes them into a DataFrame."""
     data = []
     print(f"Loading results from: {filepath}")
-    with open(filepath, 'r') as f:
-        for i, line in enumerate(f):
-            data.append(json.loads(line))
+
+    try:
+        with open(filepath, 'r') as f:
+            for i, line in enumerate(f):
+                try:
+                    data.append(json.loads(line))
+                except json.JSONDecodeError:
+                    print(f"Warning: Skipping malformed JSON line {i+1}")
+                    continue # Skip this line and continue with the next
+    except Exception as e:
+        print(f"Error reading file {filepath}: {e}")
+        return pd.DataFrame()
+
 
     if not data:
-        print("Error: No data loaded.")
+        print("Error: No data loaded or all lines were malformed.")
         return pd.DataFrame()
 
     raw_result_df = pd.DataFrame(data)
 
-    # Normalize the nested 'config' dictionary
-    config_df = pd.json_normalize(raw_result_df["config"], sep='_') 
+    # Check if 'config' column exists before normalization
+    if "config" not in raw_result_df.columns:
+        print("Error: 'config' column missing in the loaded data. Cannot process.")
+        # Optional: Inspect raw_result_df columns here for debugging
+        # print("Available columns:", raw_result_df.columns)
+        return pd.DataFrame()
 
-    # Combine results and config, drop raw config column
-    result_df = pd.concat([raw_result_df.drop(columns=["config"]), config_df], axis=1)
+    # Normalize the nested 'config' dictionary
+    # Handle potential errors during normalization (e.g., non-dict entries in 'config')
+    try:
+        # Create a temporary series dropping rows where 'config' is not a dict
+        config_series = raw_result_df["config"].dropna()
+        valid_indices = config_series[config_series.apply(isinstance, args=(dict,))].index
+        if len(valid_indices) < len(raw_result_df):
+             print(f"Warning: Dropping {len(raw_result_df) - len(valid_indices)} rows with invalid 'config' entries.")
+
+        if not valid_indices.empty:
+             config_df = pd.json_normalize(raw_result_df.loc[valid_indices, "config"], sep='_')
+             # Align config_df index with the valid indices from raw_result_df
+             config_df.index = valid_indices
+        else:
+             print("Warning: No valid 'config' entries found for normalization.")
+             config_df = pd.DataFrame() # Empty df if no valid configs
+
+        # Combine results and config, drop raw config column
+        # Use only rows with valid indices
+        result_df = pd.concat([raw_result_df.loc[valid_indices].drop(columns=["config"]), config_df], axis=1)
+
+    except Exception as e:
+        print(f"Error during JSON normalization of 'config': {e}")
+        return pd.DataFrame()
+
+    # Check if DataFrame is empty after potential row drops
+    if result_df.empty:
+        print("DataFrame is empty after processing 'config'.")
+        return pd.DataFrame()
 
     # Data Cleaning and Feature Engineering
-    # Filter out runs where target bounce wasn't reached (error is NaN)
-    # We might want to analyze these failures separately later
-    result_df = result_df[result_df["error"].notna()].copy()
+    # Filter out runs where error couldn't be calculated (error is NaN or non-numeric)
+    # Keep runs where error is a string like "LLM Parsing Failed" for potential analysis,
+    # but convert valid numeric errors first.
+    result_df['error'] = pd.to_numeric(result_df['error'], errors='coerce') # Convert numeric errors, others become NaN
+    # Now filter based on numeric NaNs if needed, or keep all rows for now
+    # result_df = result_df[result_df["error"].notna()].copy() # Original filtering - uncomment if needed
+
     if result_df.empty:
         print("Warning: No valid runs found after filtering NaNs in 'error'.")
         return pd.DataFrame()
 
-    # Fill NaN iterations for CoT (effectively 1 iteration)
-    result_df['iterations_run'] = result_df['iterations_run'].fillna(1).astype(int)
+    # Fill NaN iterations for CoT (effectively 1 iteration) or handle based on strategy
+    # Be careful assuming CoT is always 1 if it's missing
+    if 'iterations_run' in result_df.columns:
+         # Only fillna if the strategy is CoT? Or assume NaN means 1? Let's assume NaN means 1 for now.
+         result_df['iterations_run'] = result_df['iterations_run'].fillna(1).astype(int)
+    else:
+         print("Warning: 'iterations_run' column missing.")
+         result_df['iterations_run'] = 1 # Assign default if missing
 
-    # Define standard columns to keep
+
+    # --- ADD 'Num Few Shot' EXTRACTION ---
+    # The column name after normalization will be 'experiment_few_shot'
+    # Add it to the columns_to_keep dictionary
     columns_to_keep = {
         "timestamp": "Timestamp",
         "success": "Success",
         "error": "Error",
         "time_taken": "Time Taken (s)",
         "iterations_run": "Iterations Run",
+        "experiment_few_shot": "Num Few Shot", # <--- Added this line
         "final_h": "Final Height (m)",
         "final_v": "Final Velocity (m/s)",
-        "actual_distance_bounce_3": f"Actual Distance Bounce {int(result_df['experiment_target_bounce_number'].iloc[0])} (m)",
+        "actual_distance_bounce_3": f"Actual Distance Bounce 3 (m)", # Simplified name, assumes bounce 3
         "bounce_locations": "Bounce Locations (m)",
         "experiment_type": "Strategy",
         "experiment_target_distance": "Target Distance (m)",
@@ -53,55 +111,101 @@ def load_and_process_results(filepath):
         "llm_model_name": "LLM Model Name",
         "llm_temperature": "LLM Temperature",
         "ground_type": "Ground Type",
-        "ground_difficulty": "Ground Difficulty", 
-        # "ground_amplitude": "Ground Amplitude",
-        # "ground_frequency": "Ground Frequency",
+        "ground_difficulty": "Ground Difficulty",
     }
+
+    # Dynamically adjust bounce number in column name if available
+    if 'experiment_target_bounce_number' in result_df.columns:
+         # Use the first value as representative, assuming it's constant per file load
+         try:
+             bounce_num = int(result_df['experiment_target_bounce_number'].iloc[0])
+             columns_to_keep["actual_distance_bounce_3"] = f"Actual Distance Bounce {bounce_num} (m)"
+         except (ValueError, TypeError, IndexError):
+             print("Warning: Could not determine target bounce number. Using default column name.")
+             # Keep the simplified name defined above
 
     # Select and rename columns, handling potential missing columns gracefully
     final_cols = {}
+    missing_expected_cols = []
     for k, v in columns_to_keep.items():
         if k in result_df.columns:
             final_cols[k] = v
         else:
-            print(f"Warning: Expected column '{k}' not found in results.")
+            # Only warn for essential columns if desired, few_shot might be optional
+            if k != "experiment_few_shot": # Example: Don't warn loudly if few_shot is missing initially
+                missing_expected_cols.append(k)
+            # But ensure the key exists for renaming later if found
+            # This section might need refinement based on how strictly you treat missing cols
 
-    result_df = result_df[list(final_cols.keys())].rename(columns=final_cols)
+    if missing_expected_cols:
+        print(f"Warning: Expected columns not found in results: {missing_expected_cols}")
 
-    # Clean Categorical Values 
-    result_df["Strategy"] = (
-        result_df["Strategy"]
-        .str.replace("baseline_cot", "Baseline CoT", regex=False)
-        .str.replace("simlm", "SimLM", regex=False)
-    )
-    result_df["LLM Service"] = (
-        result_df["LLM Service"].str.title().str.replace("Openai", "OpenAI", regex=False)
-    )
-    result_df["Ground Type"] = result_df["Ground Type"].str.title()
+    # Filter DataFrame to only include columns that actually exist BEFORE renaming
+    existing_cols_to_rename = {k: v for k, v in final_cols.items() if k in result_df.columns}
+    result_df = result_df[list(existing_cols_to_rename.keys())].rename(columns=existing_cols_to_rename)
+
+    # --- Post-processing for the new column ---
+    if "Num Few Shot" in result_df.columns:
+        # Ensure it's numeric, fill missing with 0, convert to integer
+        result_df["Num Few Shot"] = pd.to_numeric(result_df["Num Few Shot"], errors='coerce').fillna(0).astype(int)
+    else:
+        # If the column wasn't found after normalization, add it with default 0
+        print("Warning: 'experiment_few_shot' column not found after normalization. Adding 'Num Few Shot' column with default 0.")
+        result_df["Num Few Shot"] = 0
+
+
+    # Clean Categorical Values
+    if "Strategy" in result_df.columns:
+        result_df["Strategy"] = (
+            result_df["Strategy"]
+            .str.replace("baseline_cot", "Baseline CoT", regex=False)
+            .str.replace("simlm", "SimLM", regex=False)
+        )
+    if "LLM Service" in result_df.columns:
+        result_df["LLM Service"] = (
+            result_df["LLM Service"].str.title().str.replace("Openai", "OpenAI", regex=False)
+        )
+    if "Ground Type" in result_df.columns:
+        result_df["Ground Type"] = result_df["Ground Type"].str.title()
+    else:
+         print("Warning: 'Ground Type' column missing.")
+
 
     def get_condition(row):
-        if row['Ground Type'] == 'Flat':
-            return 'Flat Ground'
-        elif row['Ground Type'] == 'Uneven' or row['Ground Type'] == 'Sinusoid': # Handle variations
-             return 'Uneven Ground (Exp B)'
-        elif row['Ground Type'] == 'Interpolated':
-            difficulty = row['Ground Difficulty']
-            return f'Interpolated (Diff: {difficulty:.1f})' 
-        else:
-            return row['Ground Type'] 
+        # Check required columns exist in the row index
+        ground_type = row.get('Ground Type', 'Unknown')
+        ground_difficulty = row.get('Ground Difficulty', None)
 
-    if 'Ground Difficulty' in result_df.columns:
+        if ground_type == 'Flat':
+            return 'Flat Ground (Exp A)' # Added Exp marker
+        elif ground_type in ('Uneven', 'Sinusoid'): # Handle variations
+             return 'Uneven Ground (Exp B)'
+        elif ground_type == 'Interpolated':
+            # Safely format difficulty if it's numeric
+            difficulty_str = f"{ground_difficulty:.1f}" if isinstance(ground_difficulty, (int, float)) else 'N/A'
+            return f'Interpolated (Diff: {difficulty_str}) (Exp C)' # Added Exp marker
+        else:
+            return ground_type # Fallback
+
+    # Apply get_condition if required columns exist
+    if 'Ground Type' in result_df.columns:
          result_df['Experiment Condition'] = result_df.apply(get_condition, axis=1)
     else:
-         result_df['Experiment Condition'] = result_df['Ground Type'] # Fallback if difficulty missing
+         result_df['Experiment Condition'] = 'Unknown' # Fallback if Ground Type missing
 
-    # Convert timestamp
-    result_df['Timestamp'] = pd.to_datetime(result_df['Timestamp'])
-    result_df = result_df.sort_values("Timestamp")
 
-    print(f"Processed {len(result_df)} valid results.")
+    # Convert timestamp if exists
+    if "Timestamp" in result_df.columns:
+        result_df['Timestamp'] = pd.to_datetime(result_df['Timestamp'], errors='coerce')
+        result_df = result_df.sort_values("Timestamp")
+    else:
+        print("Warning: 'Timestamp' column missing.")
+
+    print(f"Processed {len(result_df)} results after cleaning.")
+    # print("Columns in final DataFrame:", result_df.columns)
+    # if "Num Few Shot" in result_df.columns:
+    #     print("Few Shot Counts:\n", result_df["Num Few Shot"].value_counts())
     return result_df
-
 
 def plot_metric_distribution(df, metric_col, group_col, hue_col, title, yscale='linear', showfliers=True):
     plt.figure(figsize=(12, 7))
