@@ -11,12 +11,12 @@ class ExperimentConfig(BaseModel):
     type: Literal["baseline_cot", "simlm"] = "baseline_cot"
     visualize: bool = True
     save_results: bool = True
-    few_shot_examples_path: str | Path = "examples/few_shot_data.yaml"
+    few_shot_examples_path: str | Path = "results/experiment_results-1260.jsonl"
     target_distance: float = 50.0
     target_bounce_number: int = 3
     tolerance: int = 1
     max_iterations: int = 5
-
+    few_shot: int = 0
 
 class LLMConfig(BaseModel):
     """Configuration for the language model."""
@@ -52,10 +52,24 @@ class ProjectileConfig(BaseModel):
     radius: float = 0.05
 
 
+class EasyGroundConfig(BaseModel):
+    """Configuration for easy ground properties."""
+
+    amplitude: float = 1
+    frequency: float = 0.5
+
+
+class HardGroundConfig(BaseModel):
+    """Configuration for hard ground properties."""
+
+    amplitudes: list[float] | float = [0.6, 0.15, 0.05]
+    frequencies: list[float] | float = [0.9, 2.25, 4.5]
+
+
 class GroundConfig(BaseModel):
     """Configuration for ground properties."""
 
-    type: str = "flat"
+    type: Literal["flat", "sine", "interpolated"] = "flat"
     friction: float = 0.8
     x_min: int = -200
     x_max: int = 400
@@ -63,6 +77,8 @@ class GroundConfig(BaseModel):
     amplitude: float = 1
     frequency: float = 0.5
     difficulty: float = 0.9
+    easy: EasyGroundConfig = Field(default_factory=EasyGroundConfig)
+    hard: HardGroundConfig = Field(default_factory=HardGroundConfig)
 
 
 class Config(BaseModel):

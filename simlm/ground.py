@@ -90,7 +90,11 @@ class FlatGround(Ground):
 
     Experiment A - Ground with constant zero height.
     """
-
+    @property
+    def description(self) -> str:
+        """Return a description of the ground type."""
+        return f"A flat ground characterized by y = 0 for all x."
+    
     def height(
         self,
         x: float | NDArray[np.float64],
@@ -213,10 +217,10 @@ class HardGround(Ground):
 
     def __init__(
         self,
-        amplitudes: list[float] | NDArray[np.float64] = np.array(
+        amplitudes: list[float] | NDArray[np.float64] | float = np.array(
             [0.6, 0.15, 0.05]
         ),
-        frequencies: list[float] | NDArray[np.float64] = np.array(
+        frequencies: list[float] | NDArray[np.float64] | float = np.array(
             [0.9, 2.25, 4.5]
         ),
     ) -> None:
@@ -232,6 +236,10 @@ class HardGround(Ground):
         """
         # Ensure amplitudes and frequencies are numpy arrays and have
         # the same shape
+        if isinstance(amplitudes, float):
+            amplitudes = [amplitudes]
+        if isinstance(frequencies, float):
+            frequencies = [frequencies]
         if isinstance(amplitudes, list):
             amplitudes = np.array(amplitudes, dtype=np.float64)
         if isinstance(frequencies, list):
@@ -277,10 +285,8 @@ class InterpolatedGround(Ground):
     def description(self) -> str:
         """Return a description of the ground type."""
         return (
-            "An interpolated ground with difficulty with a mixture of "
-            f"{1 - self.difficulty} easy and {self.difficulty} hard surfaces.\n"
-            f"Easy ground: {self.easy_ground.description}.\n"
-            f"Hard ground: {self.hard_ground.description}."
+            f"An interpolated ground with a mixture of {1 - self.difficulty} easy and {self.difficulty} hard surfaces. "
+            f"(Easy: {self.easy_ground.description}, Hard: {self.hard_ground.description})"
         )
 
     def __init__(

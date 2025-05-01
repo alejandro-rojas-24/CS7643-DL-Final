@@ -13,6 +13,7 @@ from ollama import GenerateResponse
 from openai import APIError, OpenAI, RateLimitError
 from openai.types.responses.response import Response
 from pydantic import BaseModel
+import functools
 from tenacity import (
     retry,
     retry_if_exception_type,
@@ -25,6 +26,27 @@ logger = logging.getLogger(__name__)
 load_dotenv()
 
 
+def log_llm_response(func):
+    """Decorator to log LLM requests and responses."""
+
+    @functools.wraps(func)
+    def wrapper(self, prompt: str, temperature: float = 0.0, *args, **kwargs):
+        client_name = self.__class__.__name__
+        logger.debug(
+            f"{client_name} request: model={self.model_name}, temperature={temperature}, prompt={prompt}"
+        )
+
+        response = func(self, prompt, temperature, *args, **kwargs)
+
+        logger.info(
+            f"{client_name} model:{self.model_name}, response: {response}"
+        )
+
+        return response
+
+    return wrapper
+
+
 class LLMResponse(BaseModel):
     """Pydantic model representing a parsed response from an LLM."""
 
@@ -35,13 +57,11 @@ class LLMResponse(BaseModel):
 
     def validate(self) -> None:
         if self.reasoning is None and self.critique is None:
-            raise ValueError(
-                "Response must contain either reasoning or critique"
+            logger.warning(
+                "Response does not contain either reasoning or critique"
             )
         if self.reasoning is not None and self.critique is not None:
-            raise ValueError(
-                "Response cannot contain both reasoning and critique"
-            )
+            logger.warning("Response contains both reasoning and critique")
 
 
 class LLMClient(ABC):
@@ -127,7 +147,10 @@ class OpenAIClient(LLMClient):
     """Client for OpenAI's LLM API."""
 
     def __init__(
-        self, model_name: str, api_key: str | None = None, **kwargs
+        self,
+        model_name: str,
+        api_key: str | None = None,
+        **kwargs,
     ) -> None:
         """
         Initialize the OpenAI client.
@@ -161,6 +184,7 @@ class OpenAIClient(LLMClient):
             temperature=temperature,
         )
 
+    @log_llm_response
     def generate_response(
         self, prompt: str, temperature: float = 0.0
     ) -> str | None:
@@ -219,6 +243,7 @@ class GoogleClient(LLMClient):
             ),
         )
 
+    @log_llm_response
     def generate_response(
         self,
         prompt: str,
@@ -250,7 +275,11 @@ class OllamaClient(LLMClient):
     """Client for local Ollama API."""
 
     def __init__(
-        self, model_name: str, base_url: str | None = None, **kwargs
+        self,
+        model_name: str,
+        base_url: str | None = None,
+        timeout: int = 10,
+        **kwargs,
     ) -> None:
         """
         Initialize the Ollama client.
@@ -262,12 +291,48 @@ class OllamaClient(LLMClient):
         model_name = model_name.removeprefix("ollama/")
         super().__init__(model_name, **kwargs)
         self.base_url = base_url or os.getenv(
-            "OLLAMA_BASE_URL", "http://localhost:11434"
+            "OLLAMA_BASE_URL",
+            "http://localhost:11434",
         )
-        self.client = ollama.Client(host=self.base_url)
+        self.client = ollama.Client(host=self.base_url, timeout=timeout)
 
+    def is_model_available(self) -> bool:
+        """Check if the specified model is available."""
+        try:
+            models_list = self.client.list()
+            for model_tuple in models_list:
+                for model_data in model_tuple[1]:
+                    if model_data.model == self.model_name:
+                        return True
+            return False
+        except Exception as e:
+            logger.error(f"Failed to check model availability: {e}")
+            return False
+
+    def download_model(self) -> bool:
+        """Download the specified model if not available."""
+        try:
+            if not self.is_model_available():
+                logger.info(f"Downloading model {self.model_name}...")
+                # Remove timeout for download which can take a few minutes
+                downloader_client = ollama.Client(host=self.base_url)
+                downloader_client.pull(self.model_name)
+                return True
+            return False
+        except Exception as e:
+            logger.error(f"Failed to download model: {e}")
+            return False
+
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_fixed(5),
+        reraise=True,
+    )
     def _call_ollama_api(
-        self, model: str, prompt: str, temperature: float
+        self,
+        model: str,
+        prompt: str,
+        temperature: float,
     ) -> GenerateResponse:
         """Make API call to Ollama with retry logic."""
         return self.client.generate(
@@ -277,6 +342,7 @@ class OllamaClient(LLMClient):
             format="json",
         )
 
+    @log_llm_response
     def generate_response(
         self,
         prompt: str,
@@ -292,6 +358,8 @@ class OllamaClient(LLMClient):
         Returns:
             The LLM's response text, or None if an error occurred
         """
+        if not self.is_model_available():
+            self.download_model()
         try:
             response = self._call_ollama_api(
                 self.model_name,

@@ -6,6 +6,7 @@ from argparse import ArgumentParser
 from simlm.config import Config
 from simlm.projectiles import ProjectileSimulator
 from simlm.runner import SimLMRunner
+from simlm.examples import load_examples
 
 logging.basicConfig(
     level=logging.INFO,
@@ -24,22 +25,31 @@ def save_results(results, filename="results/experiment_results.jsonl"):
         logger.exception(f"Error saving results: {e}")
 
 
-def load_examples(filepath="examples/few_shot_data.yaml"):
-    """Placeholder function to load few-shot examples."""
-    # Example structure expected by templates:
-    # [ {'query': str, 'reasoning': str, 'answer_json': str}, ... ] for CoT
-    # [ {'query': str, 'history': list_of_steps, 'final_answer_json': str, 'target': float}, ... ] for SimLM
-    raise NotImplementedError
-
-
 def run_experiment(config: Config) -> tuple[SimLMRunner, dict]:
     """Run the experiment based on the provided configuration."""
     runner = SimLMRunner(config)
     experiment_type = config.experiment.type
+
+    if config.experiment.few_shot > 0:
+        examples = load_examples(
+            config.experiment.few_shot_examples_path,
+            strategy_type=config.experiment.type,
+            num_examples=config.experiment.few_shot,
+            success_only=True,
+            filter_dict={
+                'config.ground.type': config.ground.type,
+                "config.llm.model_name": config.llm.model_name
+            }
+        )
+    else:
+        examples = None
+
     if experiment_type == "baseline_cot":
-        return runner, runner.run_baseline_cot()
+        return runner, runner.run_baseline_cot(examples)
+    
     elif experiment_type == "simlm":
-        return runner, runner.run_simlm()
+        return runner, runner.run_simlm(examples)
+    
     else:
         raise ValueError(f"Unknown experiment type: {experiment_type}")
 

@@ -5,9 +5,18 @@ import time
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from simlm.config import Config
-from simlm.ground import FlatGround, Ground, InterpolatedGround, SineGround
+from simlm.ground import (
+    EasyGround,
+    FlatGround,
+    Ground,
+    HardGround,
+    InterpolatedGround,
+    SineGround,
+)
 from simlm.llm import LLMClient
 from simlm.projectiles import ProjectileSimulator
+
+logger = logging.getLogger(__name__)
 
 # Jinja Setup
 template_dir = os.path.join(os.path.dirname(__file__), "prompt_templates")
@@ -18,19 +27,15 @@ jinja_env = Environment(
     lstrip_blocks=True,
 )
 
-logger = logging.getLogger(__name__)
-
-
 def ordinal(n: int) -> str:
-    """Add ordinal number suffix"""
     if 11 <= (n % 100) <= 13:
         suffix = "th"
     else:
         suffix = ["th", "st", "nd", "rd", "th"][min(n % 10, 4)]
     return str(n) + suffix
 
-
 jinja_env.filters["ordinal"] = ordinal
+
 
 
 def calculate_error(bounce_locations, target_bounce_num, target_dist):
@@ -44,6 +49,7 @@ def calculate_error(bounce_locations, target_bounce_num, target_dist):
 
 class SimLMRunner:
     def __init__(self, config: Config) -> None:
+        self.config = config
         # LLM
         self.model_service = config.llm.service
         self.model_name = config.llm.model_name
@@ -80,7 +86,19 @@ class SimLMRunner:
         # Experiment C: Varying Difficulty
         elif self.ground_type == "interpolated":
             difficulty = config.ground.difficulty
-            self.ground = InterpolatedGround(difficulty)
+            easy_ground = EasyGround(
+                config.ground.easy.amplitude,
+                config.ground.easy.frequency,
+            )
+            hard_ground = HardGround(
+                config.ground.hard.amplitudes,
+                config.ground.hard.frequencies,
+            )
+            self.ground = InterpolatedGround(
+                difficulty=difficulty,
+                easy_ground=easy_ground,
+                hard_ground=hard_ground,
+            )
 
         # Experiment
         self.distance = config.experiment.target_distance
@@ -141,7 +159,9 @@ class SimLMRunner:
         if not data:
             logger.error("Failed to get valid parameters from LLM.")
             return {
+                "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
                 "success": False,
+                "config": self.config.model_dump(),
                 "error": "LLM Parsing Failed",
                 "model": self.model_name,
             }
@@ -159,12 +179,9 @@ class SimLMRunner:
 
         end_time = time.time()
         result = {
+            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
             "success": error is not None and error <= self.tolerance,
-            "strategy": "CoT",
-            "model": self.model_name,
-            "ground": str(self.ground),
-            "predicted_h": h,
-            "predicted_v": v,
+            "config": self.config.model_dump(),
             "final_h": h,
             "final_v": v,
             "reasoning": reasoning,
@@ -173,6 +190,7 @@ class SimLMRunner:
             "error": error,
             "within_tolerance": error is not None and error <= self.tolerance,
             "time_taken": end_time - start_time,
+            "few_shot_examples": few_shot_examples,
         }
         print(
             f"Result: Bounces={bounce_locs}, Target Bounce Dist={actual_dist:.2f}m, Error={error:.2f}m"
@@ -214,11 +232,11 @@ class SimLMRunner:
                     target_distance=self.distance,
                     target_tolerance=self.tolerance,
                     ground_description=self.ground.description,
-                    history=history,  # Pass the whole history
+                    history=history,  
                 )
                 step_type = "critique"
 
-            # 2. Call LLM
+            # Call LLM
             client = LLMClient.from_model_service(
                 self.model_service,
                 self.model_name,
@@ -241,7 +259,9 @@ class SimLMRunner:
                     final_error is not None and final_error <= self.tolerance
                 )
                 return {
+                    "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
                     "success": success_flag,
+                    "config": self.config.model_dump(),
                     "error": f"LLM Parsing Failed Iter {iteration + 1}",
                     "history": history,
                 }
@@ -291,7 +311,7 @@ class SimLMRunner:
                 print(
                     f"Success! Target achieved within tolerance at iteration {iteration + 1}."
                 )
-                break  # Exit loop on success
+                break  
 
         # End of loop or break
         end_time = time.time()
@@ -316,11 +336,9 @@ class SimLMRunner:
         )
 
         result = {
+            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
             "success": success_flag,
-            "strategy": "SimLM",
-            "model": self.model_name,
-            "ground": str(self.ground),
-            # Estimate based on steps stored
+            "config": self.config.model_dump(),
             "iterations_run": len(history) // 3
             + (1 if len(history) % 3 > 0 else 0),
             "final_h": current_h,
@@ -331,6 +349,8 @@ class SimLMRunner:
             "within_tolerance": success_flag,
             "history": history,
             "time_taken": end_time - start_time,
+            "few_shot_examples": few_shot_examples,
+
         }
         print(
             f"Finished SimLM in {result['time_taken']:.2f}s. Final Error: {final_error:.2f}m"
