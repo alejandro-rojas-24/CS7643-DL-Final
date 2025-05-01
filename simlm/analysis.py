@@ -1,181 +1,200 @@
+from scipy import stats 
 import json
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-from scipy import stats 
+import os
+from collections import Counter
+import matplotlib.ticker as mtick # For percentage formatting
 
+# --- Helper Function for Condition Mapping (Keep existing) ---
+def map_ground_to_condition(row):
+    # (Keep existing map_ground_to_condition function)
+    ground_type = row.get('Ground Type', 'Unknown')
+    ground_difficulty = row.get('Ground Difficulty', None) # Might be NaN or missing
+    if ground_type == 'Flat': return 'Flat Ground (Exp A)'
+    if ground_type in ('Uneven', 'Sinusoid'): return 'Uneven Ground (Exp B)'
+    if ground_type == 'Interpolated':
+        if pd.notna(ground_difficulty) and isinstance(ground_difficulty, (int, float)): return f'Interpolated (Diff: {ground_difficulty:.1f}) (Exp C)'
+        else: return 'Interpolated (Exp C)' # Fallback
+    if isinstance(ground_type, str): return ground_type.title()
+    return 'Unknown'
 
-
+# --- Data Loading (Keep existing load_and_process_results) ---
 def load_and_process_results(filepath):
-    """Loads results from JSON Lines file and processes them into a DataFrame."""
+    # (Keep the LATEST version of load_and_process_results)
+    # ... (ensure the previous function code is here) ...
+    # Example snippet of the start:
     data = []
     print(f"Loading results from: {filepath}")
-
-    try:
+    if not os.path.exists(filepath): print(f"Error: File not found at {filepath}"); return pd.DataFrame()
+    try: # simplified loading part for brevity
         with open(filepath, 'r') as f:
-            for i, line in enumerate(f):
-                try:
-                    data.append(json.loads(line))
-                except json.JSONDecodeError:
-                    print(f"Warning: Skipping malformed JSON line {i+1}")
-                    continue 
-    except Exception as e:
-        print(f"Error reading file {filepath}: {e}")
-        return pd.DataFrame()
-
-
-    if not data:
-        print("Error: No data loaded or all lines were malformed.")
-        return pd.DataFrame()
-
+            for i, line in enumerate(f): data.append(json.loads(line))
+    except: print("Error reading/parsing file"); return pd.DataFrame()
+    if not data: print("No data loaded"); return pd.DataFrame()
+    # ... rest of the load_and_process_results function ...
     raw_result_df = pd.DataFrame(data)
+    if "config" not in raw_result_df.columns: print("Error: 'config' column missing."); return pd.DataFrame()
+    # (Assume the rest of the function correctly processes and returns the df)
+    # --- Normalization ---
+    normalized_configs = []
+    valid_indices = []
+    for index, row in raw_result_df.iterrows():
+        config_data = row.get('config')
+        if isinstance(config_data, dict):
+            normalized = pd.json_normalize(config_data, sep='_')
+            normalized_configs.append(normalized)
+            valid_indices.append(index)
+        else: pass # Skip invalid config rows
 
-    if "config" not in raw_result_df.columns:
-        print("Error: 'config' column missing in the loaded data. Cannot process.")
-        return pd.DataFrame()
+    if not valid_indices: return pd.DataFrame()
+    config_df = pd.concat(normalized_configs); config_df.index = valid_indices
+    result_df = pd.concat([raw_result_df.loc[valid_indices].drop(columns=["config"]), config_df], axis=1)
+    if result_df.empty: return pd.DataFrame()
 
-    # Normalize the nested dictionary
-    try:
-        # Create a temporary series dropping rows where not a dict
-        config_series = raw_result_df["config"].dropna()
-        valid_indices = config_series[config_series.apply(isinstance, args=(dict,))].index
-        if len(valid_indices) < len(raw_result_df):
-             print(f"Warning: Dropping {len(raw_result_df) - len(valid_indices)} rows with invalid 'config' entries.")
-
-        if not valid_indices.empty:
-             config_df = pd.json_normalize(raw_result_df.loc[valid_indices, "config"], sep='_')
-             config_df.index = valid_indices
-        else:
-             print("Warning: No valid 'config' entries found for normalization.")
-             config_df = pd.DataFrame() 
-
-        # Use only rows with valid indices
-        result_df = pd.concat([raw_result_df.loc[valid_indices].drop(columns=["config"]), config_df], axis=1)
-
-    except Exception as e:
-        print(f"Error during JSON normalization of 'config': {e}")
-        return pd.DataFrame()
-
-    if result_df.empty:
-        print("DataFrame is empty after processing 'config'.")
-        return pd.DataFrame()
-
-    result_df['error'] = pd.to_numeric(result_df['error'], errors='coerce') # Convert numeric errors, others become NaN
-
-    if result_df.empty:
-        print("Warning: No valid runs found after filtering NaNs in 'error'.")
-        return pd.DataFrame()
-
-    # Fill NaN iterations for CoT (effectively 1 iteration) or handle based on strategy
-    if 'iterations_run' in result_df.columns:
-         # Only fillna if the strategy is CoT? Or assume NaN means 1? Let's assume NaN means 1 for now.
-         result_df['iterations_run'] = result_df['iterations_run'].fillna(1).astype(int)
-    else:
-         print("Warning: 'iterations_run' column missing.")
-         result_df['iterations_run'] = 1 
-
-    columns_to_keep = {
-        "timestamp": "Timestamp",
-        "success": "Success",
-        "error": "Error",
-        "time_taken": "Time Taken (s)",
-        "iterations_run": "Iterations Run",
-        "experiment_few_shot": "Num Few Shot",
-        "final_h": "Final Height (m)",
-        "final_v": "Final Velocity (m/s)",
-        "actual_distance_bounce_3": f"Actual Distance Bounce 3 (m)", 
-        "bounce_locations": "Bounce Locations (m)",
-        "experiment_type": "Strategy",
-        "experiment_target_distance": "Target Distance (m)",
-        "experiment_max_iterations": "Max Iterations Allowed",
-        "llm_service": "LLM Service",
-        "llm_model_name": "LLM Model Name",
-        "llm_temperature": "LLM Temperature",
-        "ground_type": "Ground Type",
-        "ground_difficulty": "Ground Difficulty",
-    }
-
-    if 'experiment_target_bounce_number' in result_df.columns:
-         try:
-             bounce_num = int(result_df['experiment_target_bounce_number'].iloc[0])
-             columns_to_keep["actual_distance_bounce_3"] = f"Actual Distance Bounce {bounce_num} (m)"
-         except (ValueError, TypeError, IndexError):
-             print("Warning: Could not determine target bounce number. Using default column name.")
-
-    # Select and rename columns, handling potential missing columns
-    final_cols = {}
-    missing_expected_cols = []
-    for k, v in columns_to_keep.items():
-        if k in result_df.columns:
-            final_cols[k] = v
-        else:
-            if k != "experiment_few_shot": 
-                missing_expected_cols.append(k)
-
-    if missing_expected_cols:
-        print(f"Warning: Expected columns not found in results: {missing_expected_cols}")
-
-    # Filter DataFrame to only include columns that actually exist BEFORE renaming
-    existing_cols_to_rename = {k: v for k, v in final_cols.items() if k in result_df.columns}
-    result_df = result_df[list(existing_cols_to_rename.keys())].rename(columns=existing_cols_to_rename)
-
-    if "Num Few Shot" in result_df.columns:
-        # Ensure it's numeric, fill missing with 0, convert to integer
-        result_df["Num Few Shot"] = pd.to_numeric(result_df["Num Few Shot"], errors='coerce').fillna(0).astype(int)
-    else:
-        print("Warning: 'experiment_few_shot' column not found after normalization. Adding 'Num Few Shot' column with default 0.")
-        result_df["Num Few Shot"] = 0
-
-
-    # Clean Categorical Values
-    if "Strategy" in result_df.columns:
-        result_df["Strategy"] = (
-            result_df["Strategy"]
-            .str.replace("baseline_cot", "Baseline CoT", regex=False)
-            .str.replace("simlm", "SimLM", regex=False)
-        )
-    if "LLM Service" in result_df.columns:
-        result_df["LLM Service"] = (
-            result_df["LLM Service"].str.title().str.replace("Openai", "OpenAI", regex=False)
-        )
-    if "Ground Type" in result_df.columns:
-        result_df["Ground Type"] = result_df["Ground Type"].str.title()
-    else:
-         print("Warning: 'Ground Type' column missing.")
-
-
-    def get_condition(row):
-        # Check required columns exist in the row index
-        ground_type = row.get('Ground Type', 'Unknown')
-        ground_difficulty = row.get('Ground Difficulty', None)
-
-        if ground_type == 'Flat':
-            return 'Flat Ground (Exp A)'
-        elif ground_type in ('Uneven', 'Sinusoid'): 
-             return 'Uneven Ground (Exp B)'
-        elif ground_type == 'Interpolated':
-            difficulty_str = f"{ground_difficulty:.1f}" if isinstance(ground_difficulty, (int, float)) else 'N/A'
-            return f'Interpolated (Diff: {difficulty_str}) (Exp C)' 
-        else:
-            return ground_type 
-
-    # Apply get_condition if required columns exist
-    if 'Ground Type' in result_df.columns:
-         result_df['Experiment Condition'] = result_df.apply(get_condition, axis=1)
-    else:
-         result_df['Experiment Condition'] = 'Unknown' 
-
-
-    # Convert timestamp if exists
-    if "Timestamp" in result_df.columns:
-        result_df['Timestamp'] = pd.to_datetime(result_df['Timestamp'], errors='coerce')
-        result_df = result_df.sort_values("Timestamp")
-    else:
-        print("Warning: 'Timestamp' column missing.")
-
+    # --- Define/Rename/Clean (Simplified for brevity - use full version) ---
+    columns_to_keep = { "timestamp": "Timestamp", "success": "Success_Raw", "error": "Error_Raw", "time_taken": "Time Taken (s)", "iterations_run": "Iterations Run", "experiment_few_shot": "Num Few Shot", "final_h": "Final Height (m)", "final_v": "Final Velocity (m/s)", "actual_distance_bounce_3": f"Actual Distance Bounce 3 (m)", "bounce_locations": "Bounce Locations (m)", "experiment_type": "Strategy", "experiment_target_distance": "Target Distance (m)", "experiment_max_iterations": "Max Iterations Allowed", "llm_service": "LLM Service", "llm_model_name": "LLM Model Name", "llm_temperature": "LLM Temperature", "ground_type": "Ground Type", "ground_difficulty": "Ground Difficulty", "experiment_target_bounce_number": "Target Bounce Number", "experiment_tolerance": "Tolerance (m)" }
+    target_bounce_num = 3; columns_to_keep["actual_distance_bounce_3"] = f"Actual Distance Bounce {target_bounce_num} (m)"
+    rename_map = {k: v for k, v in columns_to_keep.items() if k in result_df.columns}
+    result_df = result_df[list(rename_map.keys())].rename(columns=rename_map)
+    if "Error_Raw" in result_df.columns: result_df['Error'] = pd.to_numeric(result_df['Error_Raw'], errors='coerce')
+    else: result_df['Error'] = np.nan
+    if "Iterations Run" in result_df.columns: result_df['Iterations Run'] = pd.to_numeric(result_df['Iterations Run'], errors='coerce').fillna(1).astype(int)
+    else: result_df['Iterations Run'] = 1
+    if "Num Few Shot" in result_df.columns: result_df["Num Few Shot"] = pd.to_numeric(result_df["Num Few Shot"], errors='coerce').fillna(0).astype(int)
+    else: result_df["Num Few Shot"] = 0
+    if 'Error' in result_df.columns and 'Tolerance (m)' in result_df.columns:
+         result_df['Tolerance (m)'] = pd.to_numeric(result_df['Tolerance (m)'], errors='coerce')
+         result_df['Success'] = (result_df['Error'].notna() & result_df['Tolerance (m)'].notna() & (result_df['Error'] <= result_df['Tolerance (m)']))
+    elif 'Success_Raw' in result_df.columns: result_df['Success'] = result_df['Success_Raw'].fillna(False).astype(bool)
+    else: result_df['Success'] = False
+    result_df['Success'] = result_df['Success'].astype(bool)
+    if "Strategy" in result_df.columns: result_df["Strategy"] = result_df["Strategy"].astype(str).str.replace("baseline_cot", "Baseline CoT", regex=False).str.replace("simlm", "SimLM", regex=False)
+    if "LLM Service" in result_df.columns: result_df["LLM Service"] = result_df["LLM Service"].astype(str).str.title().str.replace("Openai", "OpenAI", regex=False)
+    if "Ground Type" in result_df.columns: result_df["Ground Type"] = result_df["Ground Type"].astype(str).str.title()
+    if 'Ground Type' in result_df.columns: result_df['Experiment Condition'] = result_df.apply(map_ground_to_condition, axis=1)
+    else: result_df['Experiment Condition'] = 'Unknown'
+    if "Timestamp" in result_df.columns: result_df['Timestamp'] = pd.to_datetime(result_df['Timestamp'], errors='coerce'); result_df = result_df.sort_values("Timestamp").reset_index(drop=True)
+    result_df = result_df.drop(columns=['Error_Raw', 'Success_Raw'], errors='ignore')
     print(f"Processed {len(result_df)} results after cleaning.")
     return result_df
+
+
+def summarize_fewshot_performance(df, group_by_cols=None):
+    # (Keep existing summarize_fewshot_performance function)
+    if group_by_cols is None: group_by_cols = ['Experiment Condition', 'Strategy']
+    required_cols = group_by_cols + ['Num Few Shot', 'Error', 'Success']
+    if not all(col in df.columns for col in required_cols): print(f"Error: Missing required columns for summary: {[c for c in required_cols if c not in df.columns]}"); return pd.DataFrame()
+    df_filtered = df.dropna(subset=['Error']).copy();
+    if df_filtered.empty: print("Warning: No rows with valid 'Error' found for summary."); return pd.DataFrame()
+    aggregation = {'Error': ['mean', 'median', 'std', 'count'],'Success': ['mean']}
+    try:
+        summary_df = df_filtered.groupby(group_by_cols + ['Num Few Shot']).agg(aggregation)
+        summary_df.columns = ['_'.join(col).strip() for col in summary_df.columns.values]
+        summary_df = summary_df.rename(columns={'Error_mean': 'Mean Error','Error_median': 'Median Error','Error_std': 'Std Dev Error','Error_count': 'Valid Run Count','Success_mean': 'Success Rate'}).reset_index()
+        return summary_df
+    except Exception as e: print(f"Error during aggregation for summary: {e}"); return pd.DataFrame()
+
+
+
+def plot_metric_by_fewshot_single_hist(df, metric='Error', title=None,
+                                  shots_to_compare=None,
+                                  group_hue='Experiment Condition', # Category for color grouping
+                                  x_group='Strategy', # Category for grouping bars WITHIN each x-tick
+                                  palette='colorblind'):
+    """
+    Plots a specified metric against few-shot count on a single axes,
+    grouping bars by specified categories.
+
+    Args:
+        df (pd.DataFrame): Processed results DataFrame.
+        metric (str): The column name of the metric to plot on the y-axis ('Error' or 'Success').
+        title (str, optional): Plot title. If None, a default title is generated.
+        shots_to_compare (list, optional): List of few-shot counts to include. Defaults to all.
+        group_hue (str): Column name for color grouping (e.g., 'Experiment Condition').
+        x_group (str): Column name for grouping bars side-by-side within each x-tick
+                       (e.g., 'Strategy'). Set to None to not group on x.
+        palette (str or dict): Color palette for seaborn.
+    """
+    if metric not in ['Error', 'Success']:
+        print(f"Error: Metric '{metric}' not supported by this plot function. Use 'Error' or 'Success'.")
+        return
+    required_cols = ['Num Few Shot', metric, group_hue]
+    if x_group: required_cols.append(x_group)
+    if not all(col in df.columns for col in required_cols):
+        missing = [col for col in required_cols if col not in df.columns]
+        print(f"Error: Missing required columns for single plot: {missing}")
+        return
+
+    plot_df = df.copy()
+    if shots_to_compare:
+        plot_df = plot_df[plot_df['Num Few Shot'].isin(shots_to_compare)]
+    else:
+        shots_to_compare = sorted(plot_df['Num Few Shot'].unique())
+
+    if plot_df.empty: print(f"No data found for the specified few-shot counts: {shots_to_compare}."); return
+
+    # Ensure categorical types for grouping columns
+    plot_df[group_hue] = plot_df[group_hue].astype(str)
+    if x_group: plot_df[x_group] = plot_df[x_group].astype(str)
+
+
+    # Metric specific handling
+    y_label = metric
+    plot_metric = metric
+    if metric == 'Error':
+        plot_df = plot_df.dropna(subset=['Error'])
+        y_label = "Mean Absolute Error (m)"
+    elif metric == 'Success':
+        y_label = "Success Rate"
+        plot_df[plot_metric] = plot_df[metric].astype(float) # Ensure numeric for mean calculation
+
+
+    if plot_df.empty: print(f"No valid data remains for metric '{metric}' after filtering."); return
+
+    # Determine order for hue and x_group
+    hue_order = sorted(plot_df[group_hue].unique())
+    x_group_order = sorted(plot_df[x_group].unique()) if x_group else None
+
+
+    # --- Plotting ---
+    plt.style.use('seaborn-v0_8-whitegrid')
+    plt.figure(figsize=(12, 7)) # Adjust figure size as needed
+
+    ax = sns.barplot(
+        data=plot_df,
+        x='Num Few Shot',
+        y=plot_metric,
+        hue=group_hue,
+        order=sorted(shots_to_compare), # Order x-axis
+        hue_order=hue_order, # Order colors
+        palette=palette,
+        errorbar=('ci', 95) # Use errorbar instead of ci
+    )
+
+    # --- Customization ---
+    if title is None:
+        title = f"{y_label} vs. Num Few-Shot Examples by {group_hue}"
+        if x_group: title += f" and {x_group}" # Note: x_group isn't directly plotted by barplot hue/x
+
+    plt.title(title, fontsize=15)
+    plt.xlabel("Number of Few-Shot Examples", fontsize=12)
+    plt.ylabel(y_label, fontsize=12)
+    # ax.tick_params(axis='both', which='major', labelsize=10)
+
+    # Format y-axis as percentage if plotting Success Rate
+    # if metric == 'Success':
+    #      ax.yaxis.set_major_formatter(mtick.PercentFormatter(xmax=1.0))
+
+    # Adjust legend position
+    plt.legend(title=group_hue, bbox_to_anchor=(1.03, 1), loc='upper left')
+    plt.tight_layout(rect=[0, 0, 0.9, 1]) # Adjust layout for legend outside
+
+    plt.show()
+
+
 
 def plot_metric_distribution(df, metric_col, group_col, hue_col, title, yscale='linear', showfliers=True):
     plt.figure(figsize=(12, 7))
@@ -219,7 +238,6 @@ def plot_success_rate(df, group_col, hue_col, title):
     plt.title(title)
     plt.xlabel(group_col.replace('_', ' ').title())
     plt.ylabel('Success Rate (%)')
-    plt.ylim(0, 105) 
     if hue_col:
        plt.legend(title=hue_col.replace('_', ' ').title(), bbox_to_anchor=(1.05, 1), loc='upper left')
     plt.xticks(rotation=30, ha='right')
