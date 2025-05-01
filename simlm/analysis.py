@@ -19,7 +19,7 @@ def load_and_process_results(filepath):
                     data.append(json.loads(line))
                 except json.JSONDecodeError:
                     print(f"Warning: Skipping malformed JSON line {i+1}")
-                    continue # Skip this line and continue with the next
+                    continue 
     except Exception as e:
         print(f"Error reading file {filepath}: {e}")
         return pd.DataFrame()
@@ -31,17 +31,13 @@ def load_and_process_results(filepath):
 
     raw_result_df = pd.DataFrame(data)
 
-    # Check if 'config' column exists before normalization
     if "config" not in raw_result_df.columns:
         print("Error: 'config' column missing in the loaded data. Cannot process.")
-        # Optional: Inspect raw_result_df columns here for debugging
-        # print("Available columns:", raw_result_df.columns)
         return pd.DataFrame()
 
-    # Normalize the nested 'config' dictionary
-    # Handle potential errors during normalization (e.g., non-dict entries in 'config')
+    # Normalize the nested dictionary
     try:
-        # Create a temporary series dropping rows where 'config' is not a dict
+        # Create a temporary series dropping rows where not a dict
         config_series = raw_result_df["config"].dropna()
         valid_indices = config_series[config_series.apply(isinstance, args=(dict,))].index
         if len(valid_indices) < len(raw_result_df):
@@ -49,13 +45,11 @@ def load_and_process_results(filepath):
 
         if not valid_indices.empty:
              config_df = pd.json_normalize(raw_result_df.loc[valid_indices, "config"], sep='_')
-             # Align config_df index with the valid indices from raw_result_df
              config_df.index = valid_indices
         else:
              print("Warning: No valid 'config' entries found for normalization.")
-             config_df = pd.DataFrame() # Empty df if no valid configs
+             config_df = pd.DataFrame() 
 
-        # Combine results and config, drop raw config column
         # Use only rows with valid indices
         result_df = pd.concat([raw_result_df.loc[valid_indices].drop(columns=["config"]), config_df], axis=1)
 
@@ -63,46 +57,34 @@ def load_and_process_results(filepath):
         print(f"Error during JSON normalization of 'config': {e}")
         return pd.DataFrame()
 
-    # Check if DataFrame is empty after potential row drops
     if result_df.empty:
         print("DataFrame is empty after processing 'config'.")
         return pd.DataFrame()
 
-    # Data Cleaning and Feature Engineering
-    # Filter out runs where error couldn't be calculated (error is NaN or non-numeric)
-    # Keep runs where error is a string like "LLM Parsing Failed" for potential analysis,
-    # but convert valid numeric errors first.
     result_df['error'] = pd.to_numeric(result_df['error'], errors='coerce') # Convert numeric errors, others become NaN
-    # Now filter based on numeric NaNs if needed, or keep all rows for now
-    # result_df = result_df[result_df["error"].notna()].copy() # Original filtering - uncomment if needed
 
     if result_df.empty:
         print("Warning: No valid runs found after filtering NaNs in 'error'.")
         return pd.DataFrame()
 
     # Fill NaN iterations for CoT (effectively 1 iteration) or handle based on strategy
-    # Be careful assuming CoT is always 1 if it's missing
     if 'iterations_run' in result_df.columns:
          # Only fillna if the strategy is CoT? Or assume NaN means 1? Let's assume NaN means 1 for now.
          result_df['iterations_run'] = result_df['iterations_run'].fillna(1).astype(int)
     else:
          print("Warning: 'iterations_run' column missing.")
-         result_df['iterations_run'] = 1 # Assign default if missing
+         result_df['iterations_run'] = 1 
 
-
-    # --- ADD 'Num Few Shot' EXTRACTION ---
-    # The column name after normalization will be 'experiment_few_shot'
-    # Add it to the columns_to_keep dictionary
     columns_to_keep = {
         "timestamp": "Timestamp",
         "success": "Success",
         "error": "Error",
         "time_taken": "Time Taken (s)",
         "iterations_run": "Iterations Run",
-        "experiment_few_shot": "Num Few Shot", # <--- Added this line
+        "experiment_few_shot": "Num Few Shot",
         "final_h": "Final Height (m)",
         "final_v": "Final Velocity (m/s)",
-        "actual_distance_bounce_3": f"Actual Distance Bounce 3 (m)", # Simplified name, assumes bounce 3
+        "actual_distance_bounce_3": f"Actual Distance Bounce 3 (m)", 
         "bounce_locations": "Bounce Locations (m)",
         "experiment_type": "Strategy",
         "experiment_target_distance": "Target Distance (m)",
@@ -114,28 +96,22 @@ def load_and_process_results(filepath):
         "ground_difficulty": "Ground Difficulty",
     }
 
-    # Dynamically adjust bounce number in column name if available
     if 'experiment_target_bounce_number' in result_df.columns:
-         # Use the first value as representative, assuming it's constant per file load
          try:
              bounce_num = int(result_df['experiment_target_bounce_number'].iloc[0])
              columns_to_keep["actual_distance_bounce_3"] = f"Actual Distance Bounce {bounce_num} (m)"
          except (ValueError, TypeError, IndexError):
              print("Warning: Could not determine target bounce number. Using default column name.")
-             # Keep the simplified name defined above
 
-    # Select and rename columns, handling potential missing columns gracefully
+    # Select and rename columns, handling potential missing columns
     final_cols = {}
     missing_expected_cols = []
     for k, v in columns_to_keep.items():
         if k in result_df.columns:
             final_cols[k] = v
         else:
-            # Only warn for essential columns if desired, few_shot might be optional
-            if k != "experiment_few_shot": # Example: Don't warn loudly if few_shot is missing initially
+            if k != "experiment_few_shot": 
                 missing_expected_cols.append(k)
-            # But ensure the key exists for renaming later if found
-            # This section might need refinement based on how strictly you treat missing cols
 
     if missing_expected_cols:
         print(f"Warning: Expected columns not found in results: {missing_expected_cols}")
@@ -144,12 +120,10 @@ def load_and_process_results(filepath):
     existing_cols_to_rename = {k: v for k, v in final_cols.items() if k in result_df.columns}
     result_df = result_df[list(existing_cols_to_rename.keys())].rename(columns=existing_cols_to_rename)
 
-    # --- Post-processing for the new column ---
     if "Num Few Shot" in result_df.columns:
         # Ensure it's numeric, fill missing with 0, convert to integer
         result_df["Num Few Shot"] = pd.to_numeric(result_df["Num Few Shot"], errors='coerce').fillna(0).astype(int)
     else:
-        # If the column wasn't found after normalization, add it with default 0
         print("Warning: 'experiment_few_shot' column not found after normalization. Adding 'Num Few Shot' column with default 0.")
         result_df["Num Few Shot"] = 0
 
@@ -177,21 +151,20 @@ def load_and_process_results(filepath):
         ground_difficulty = row.get('Ground Difficulty', None)
 
         if ground_type == 'Flat':
-            return 'Flat Ground (Exp A)' # Added Exp marker
-        elif ground_type in ('Uneven', 'Sinusoid'): # Handle variations
+            return 'Flat Ground (Exp A)'
+        elif ground_type in ('Uneven', 'Sinusoid'): 
              return 'Uneven Ground (Exp B)'
         elif ground_type == 'Interpolated':
-            # Safely format difficulty if it's numeric
             difficulty_str = f"{ground_difficulty:.1f}" if isinstance(ground_difficulty, (int, float)) else 'N/A'
-            return f'Interpolated (Diff: {difficulty_str}) (Exp C)' # Added Exp marker
+            return f'Interpolated (Diff: {difficulty_str}) (Exp C)' 
         else:
-            return ground_type # Fallback
+            return ground_type 
 
     # Apply get_condition if required columns exist
     if 'Ground Type' in result_df.columns:
          result_df['Experiment Condition'] = result_df.apply(get_condition, axis=1)
     else:
-         result_df['Experiment Condition'] = 'Unknown' # Fallback if Ground Type missing
+         result_df['Experiment Condition'] = 'Unknown' 
 
 
     # Convert timestamp if exists
@@ -202,9 +175,6 @@ def load_and_process_results(filepath):
         print("Warning: 'Timestamp' column missing.")
 
     print(f"Processed {len(result_df)} results after cleaning.")
-    # print("Columns in final DataFrame:", result_df.columns)
-    # if "Num Few Shot" in result_df.columns:
-    #     print("Few Shot Counts:\n", result_df["Num Few Shot"].value_counts())
     return result_df
 
 def plot_metric_distribution(df, metric_col, group_col, hue_col, title, yscale='linear', showfliers=True):
@@ -253,7 +223,7 @@ def plot_success_rate(df, group_col, hue_col, title):
     if hue_col:
        plt.legend(title=hue_col.replace('_', ' ').title(), bbox_to_anchor=(1.05, 1), loc='upper left')
     plt.xticks(rotation=30, ha='right')
-    plt.tight_layout(rect=[0, 0, 0.85 if hue_col else 1, 1]) # Adjust layout for legend
+    plt.tight_layout(rect=[0, 0, 0.85 if hue_col else 1, 1]) 
     plt.show()
 
 def plot_metric_by_difficulty(df, metric_col, title):
@@ -273,7 +243,7 @@ def plot_metric_by_difficulty(df, metric_col, title):
         y=metric_col,
         hue='Strategy',
         marker='o',
-        errorbar=('ci', 95) # Show confidence interval
+        errorbar=('ci', 95) 
     )
     plt.title(title)
     plt.xlabel("Ground Difficulty (Interpolated)")
@@ -294,89 +264,66 @@ def plot_iterations_histogram(df, title):
                            Optionally 'Max Iterations Allowed'.
         title (str): The title for the plot.
     """
-    # Filter for SimLM strategy results
     simlm_df = df[df['Strategy'] == 'SimLM'].copy()
 
-    # Check if there's any data to plot
     if simlm_df.empty:
         print("No SimLM data found for iteration histogram.")
         return
 
-    # --- Determine Max Iterations ---
-    # Try to get from column, otherwise infer from data or default
     if 'Max Iterations Allowed' in df.columns:
-         # Use .iloc[0] assuming it's constant, handle potential NA
          max_iter_allowed = pd.to_numeric(df['Max Iterations Allowed'].dropna().iloc[0], errors='coerce')
          if pd.isna(max_iter_allowed):
-             max_iter_allowed = None # Fallback if conversion fails
+             max_iter_allowed = None 
     else:
          max_iter_allowed = None
 
-    # If not found in columns, infer from the actual iterations run
     if max_iter_allowed is None and 'Iterations Run' in simlm_df.columns:
         max_iter_allowed = pd.to_numeric(simlm_df['Iterations Run'].dropna().max(), errors='coerce')
         if pd.isna(max_iter_allowed):
-             max_iter_allowed = None # Fallback if conversion fails
+             max_iter_allowed = None 
 
-    # Default if still unknown
     if max_iter_allowed is None:
         print("Warning: Could not determine Max Iterations Allowed. Defaulting to 5.")
         max_iter_allowed = 5
     else:
-        max_iter_allowed = int(max_iter_allowed) # Ensure it's an integer
+        max_iter_allowed = int(max_iter_allowed) 
 
-    # Define bins centered around integers
     bins = np.arange(1, max_iter_allowed + 2) - 0.5
 
-    # --- Plotting ---
-    plt.style.use('seaborn-v0_8-whitegrid') # Example style
+    plt.style.use('seaborn-v0_8-whitegrid')
     plt.figure(figsize=(10, 6))
 
-    # Create the histogram using seaborn, assign to ax for legend control
     ax = sns.histplot(
         data=simlm_df,
         x='Iterations Run',
-        hue='Experiment Condition', # Let seaborn handle legend creation based on this
-        multiple="stack",          # Stack bars for different conditions
+        hue='Experiment Condition', 
+        multiple="stack",         
         bins=bins,
-        # discrete=True, # Often helpful, but can sometimes interfere with bins/legend. Test compatibility.
-        palette='viridis',         # Use a distinct color palette
-        shrink=0.8                 # Adds a bit of space between bars
+        palette='viridis',         
+        shrink=0.8          
     )
 
-    # --- Customize Plot ---
     plt.title(title, fontsize=14)
     plt.xlabel("Iterations Run by SimLM", fontsize=12)
     plt.ylabel("Number of Runs", fontsize=12)
 
-    # Set x-axis ticks to be integers for iteration counts
     plt.xticks(np.arange(1, max_iter_allowed + 1))
     ax.tick_params(axis='both', which='major', labelsize=10)
 
-    # --- Handle Legend ---
-    # Get the legend object that seaborn *should* have created
+
     legend = ax.get_legend()
 
     if legend:
-        # Set the title for the legend explicitly
         legend.set_title('Experiment Condition')
-        # Adjust legend position (place it outside the top right)
-        # bbox_to_anchor=(x, y) specifies the legend anchor point relative to axes
-        # loc specifies which part of the legend box is placed at the anchor point
+
         plt.setp(legend, bbox_to_anchor=(1.03, 1), loc='upper left')
     else:
-        # This case should be less likely now, but handle it just in case
         print("Warning: Seaborn did not automatically create a legend. Attempting manual creation.")
-        # If seaborn failed, try plt.legend AFTER the plot command
         try:
             plt.legend(title='Experiment Condition', bbox_to_anchor=(1.03, 1), loc='upper left')
         except Exception as e:
              print(f"Manual legend creation also failed: {e}")
 
-
-    # Adjust layout to prevent legend overlapping plot elements
-    # rect=[left, bottom, right, top] in fractions of figure width/height
-    # Reduce 'right' to make space for the legend outside
     plt.tight_layout(rect=[0, 0, 0.88, 1])
 
     plt.show()
@@ -389,66 +336,46 @@ def print_summary_stats(df):
         print("DataFrame is empty. Cannot calculate summary stats.")
         return
 
-    # --- Data Type Check (Debugging Aid) ---
-    # print("Data types before aggregation:\n", df.dtypes)
-    # print("Unique values in 'Error':", df['Error'].unique()[:10]) # Check for non-numeric
-    # print("Unique values in 'Time Taken (s)':", df['Time Taken (s)'].unique()[:10])
-    # print("Unique values in 'Iterations Run':", df['Iterations Run'].unique()[:10])
-    # -----------------------------------------
-
-    # Ensure relevant columns are numeric, coercing errors to NaN
-    numeric_cols = ['Error', 'Time Taken (s)', 'Iterations Run', 'Success'] # Success is bool ~ int
+    numeric_cols = ['Error', 'Time Taken (s)', 'Iterations Run', 'Success'] 
     for col in numeric_cols:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors='coerce')
         else:
              print(f"Warning: Column '{col}' expected for aggregation not found.")
 
-    # Define aggregations
     aggregations = {
-        'count': ('Error', 'size'), # Count based on a column expected to be present
+        'count': ('Error', 'size'),
         'mean_error': ('Error', 'mean'),
         'median_error': ('Error', 'median'),
         'std_error': ('Error', 'std'),
-        'success_rate_mean': ('Success', 'mean'), # Calculate mean of boolean/numeric Success
+        'success_rate_mean': ('Success', 'mean'), 
         'mean_time': ('Time Taken (s)', 'mean'),
     }
 
-    # Define the safer lambda function for SimLM iterations separately
     def safe_simlm_iter_mean(x):
-        # x is the 'Iterations Run' series for the current group
-        # First, get the 'Strategy' for the corresponding indices in the original df
         strategies = df.loc[x.index, 'Strategy']
-        # Filter the 'Iterations Run' series for only SimLM runs
         simlm_iters = x[strategies == 'SimLM']
-        # Ensure it's numeric and drop NaNs introduced by coerce or filtering
         simlm_iters_numeric = pd.to_numeric(simlm_iters, errors='coerce').dropna()
         if simlm_iters_numeric.empty:
-            return np.nan # Return NaN if no valid SimLM runs in this group
+            return np.nan 
         else:
             return simlm_iters_numeric.mean()
 
-    # Only add SimLM calculation if the necessary columns exist
     if 'Iterations Run' in df.columns and 'Strategy' in df.columns:
          aggregations['mean_simlm_iters'] = ('Iterations Run', safe_simlm_iter_mean)
 
-    # Perform the aggregation
     try:
         summary = df.groupby(['Strategy', 'Experiment Condition'], observed=False, dropna=False).agg(
-            **aggregations # Use dictionary unpacking
+            **aggregations
         ).reset_index()
     except Exception as e:
         print(f"Error during aggregation: {e}")
         print("Problem might be due to non-numeric data in aggregated columns.")
-        # Optionally print problematic group data here if possible
-        return # Exit if aggregation fails
+        return 
 
-    # --- Post-processing and Formatting ---
-    # Rename success rate column
     summary = summary.rename(columns={'success_rate_mean': 'success_rate'})
     summary['success_rate'] = (summary['success_rate'] * 100) # Calculate percentage
 
-    # Rounding (apply only to columns that exist)
     cols_to_round_1 = ['success_rate', 'mean_simlm_iters']
     cols_to_round_2 = ['mean_error', 'median_error', 'std_error', 'mean_time']
 
@@ -459,7 +386,6 @@ def print_summary_stats(df):
          if col in summary.columns:
             summary[col] = summary[col].round(2)
 
-    # Handle potential NaN in mean_simlm_iters after rounding if needed
     if 'mean_simlm_iters' in summary.columns:
         summary['mean_simlm_iters'] = summary['mean_simlm_iters'].fillna('N/A') # Or keep as NaN
 
@@ -468,7 +394,6 @@ def print_summary_stats(df):
 
 def plot_simlm_cot_error_ratio(df, model_col='LLM Model Name', strategy_col='Strategy', error_col='Error'):
     """Plots the ratio of SimLM error to COT error for different models."""
-    # calc mean error by model and strategy
     mean_errors = df.groupby([model_col, strategy_col])[error_col].mean().unstack()
 
     mean_errors.dropna(inplace=True)
@@ -493,7 +418,6 @@ def plot_error_ratio_by_ground(df, model_col='LLM Model Name', strategy_col='Str
     
     mean_errors = df.groupby([model_col, strategy_col, ground_col])[error_col].mean().unstack(level=strategy_col)
     
-    # Check what columns exist
     expected_strategies = ['Baseline CoT', 'SimLM']
     for strategy in expected_strategies:
         if strategy not in mean_errors.columns:
@@ -527,7 +451,6 @@ def summarize_average_error_by_ground(df, model_col='LLM Model Name', ground_col
     summary = summary.dropna()
     summary = summary.round(2)
     print("\n--- Average Error by LLM Model and Ground Type ---")
-    #print(summary)
     return summary
 
 def summarize_improvement_by_ground(df, model_col='LLM Model Name', ground_col='Ground Type', strategy_col='Strategy', error_col='Error'):
@@ -538,7 +461,6 @@ def summarize_improvement_by_ground(df, model_col='LLM Model Name', ground_col='
     summary = summary.dropna()
     summary = summary.round(2)
     print("\n--- Improvement (Baseline CoT - SimLM) by LLM Model and Ground Type ---")
-    #print(summary)
     return summary
 
 def summarize_relative_improvement(df, model_col='LLM Model Name', ground_col='Ground Type', strategy_col='Strategy', error_col='Error'):
@@ -549,7 +471,6 @@ def summarize_relative_improvement(df, model_col='LLM Model Name', ground_col='G
     summary = summary.dropna()
     summary = summary.round(1)
     print("\n--- Relative Improvement (%) by LLM Model and Ground Type ---")
-    #print(summary)
     return summary
 
 def plot_error_vs_ground_difficulty(df):
@@ -575,7 +496,6 @@ def summarize_failure_rate(df, error_threshold=20.0):
     failure_summary = failure_summary.dropna()
     failure_summary = failure_summary.round(1)
     print("\n--- Failure Rate (%) by LLM Model and Strategy ---")
-    #print(failure_summary)
     return failure_summary
 
 def plot_iterations_vs_error(df):
