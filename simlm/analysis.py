@@ -6,11 +6,9 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import os
 from collections import Counter
-import matplotlib.ticker as mtick # For percentage formatting
+import matplotlib.ticker as mtick 
 
-# --- Helper Function for Condition Mapping (Keep existing) ---
 def map_ground_to_condition(row):
-    # (Keep existing map_ground_to_condition function)
     ground_type = row.get('Ground Type', 'Unknown')
     ground_difficulty = row.get('Ground Difficulty', None) # Might be NaN or missing
     if ground_type == 'Flat': return 'Flat Ground (Exp A)'
@@ -21,24 +19,18 @@ def map_ground_to_condition(row):
     if isinstance(ground_type, str): return ground_type.title()
     return 'Unknown'
 
-# --- Data Loading (Keep existing load_and_process_results) ---
 def load_and_process_results(filepath):
-    # (Keep the LATEST version of load_and_process_results)
-    # ... (ensure the previous function code is here) ...
-    # Example snippet of the start:
     data = []
     print(f"Loading results from: {filepath}")
     if not os.path.exists(filepath): print(f"Error: File not found at {filepath}"); return pd.DataFrame()
-    try: # simplified loading part for brevity
+    try: 
         with open(filepath, 'r') as f:
             for i, line in enumerate(f): data.append(json.loads(line))
     except: print("Error reading/parsing file"); return pd.DataFrame()
     if not data: print("No data loaded"); return pd.DataFrame()
-    # ... rest of the load_and_process_results function ...
     raw_result_df = pd.DataFrame(data)
     if "config" not in raw_result_df.columns: print("Error: 'config' column missing."); return pd.DataFrame()
-    # (Assume the rest of the function correctly processes and returns the df)
-    # --- Normalization ---
+
     normalized_configs = []
     valid_indices = []
     for index, row in raw_result_df.iterrows():
@@ -47,14 +39,13 @@ def load_and_process_results(filepath):
             normalized = pd.json_normalize(config_data, sep='_')
             normalized_configs.append(normalized)
             valid_indices.append(index)
-        else: pass # Skip invalid config rows
+        else: pass 
 
     if not valid_indices: return pd.DataFrame()
     config_df = pd.concat(normalized_configs); config_df.index = valid_indices
     result_df = pd.concat([raw_result_df.loc[valid_indices].drop(columns=["config"]), config_df], axis=1)
     if result_df.empty: return pd.DataFrame()
 
-    # --- Define/Rename/Clean (Simplified for brevity - use full version) ---
     columns_to_keep = { "timestamp": "Timestamp", "success": "Success_Raw", "error": "Error_Raw", "time_taken": "Time Taken (s)", "iterations_run": "Iterations Run", "experiment_few_shot": "Num Few Shot", "final_h": "Final Height (m)", "final_v": "Final Velocity (m/s)", "actual_distance_bounce_3": f"Actual Distance Bounce 3 (m)", "bounce_locations": "Bounce Locations (m)", "experiment_type": "Strategy", "experiment_target_distance": "Target Distance (m)", "experiment_max_iterations": "Max Iterations Allowed", "llm_service": "LLM Service", "llm_model_name": "LLM Model Name", "llm_temperature": "LLM Temperature", "ground_type": "Ground Type", "ground_difficulty": "Ground Difficulty", "experiment_target_bounce_number": "Target Bounce Number", "experiment_tolerance": "Tolerance (m)" }
     target_bounce_num = 3; columns_to_keep["actual_distance_bounce_3"] = f"Actual Distance Bounce {target_bounce_num} (m)"
     rename_map = {k: v for k, v in columns_to_keep.items() if k in result_df.columns}
@@ -83,7 +74,6 @@ def load_and_process_results(filepath):
 
 
 def summarize_fewshot_performance(df, group_by_cols=None):
-    # (Keep existing summarize_fewshot_performance function)
     if group_by_cols is None: group_by_cols = ['Experiment Condition', 'Strategy']
     required_cols = group_by_cols + ['Num Few Shot', 'Error', 'Success']
     if not all(col in df.columns for col in required_cols): print(f"Error: Missing required columns for summary: {[c for c in required_cols if c not in df.columns]}"); return pd.DataFrame()
@@ -101,8 +91,8 @@ def summarize_fewshot_performance(df, group_by_cols=None):
 
 def plot_metric_by_fewshot_single_hist(df, metric='Error', title=None,
                                   shots_to_compare=None,
-                                  group_hue='Experiment Condition', # Category for color grouping
-                                  x_group='Strategy', # Category for grouping bars WITHIN each x-tick
+                                  group_hue='Experiment Condition', 
+                                  x_group='Strategy', 
                                   palette='colorblind'):
     """
     Plots a specified metric against few-shot count on a single axes,
@@ -149,49 +139,38 @@ def plot_metric_by_fewshot_single_hist(df, metric='Error', title=None,
         y_label = "Mean Absolute Error (m)"
     elif metric == 'Success':
         y_label = "Success Rate"
-        plot_df[plot_metric] = plot_df[metric].astype(float) # Ensure numeric for mean calculation
+        plot_df[plot_metric] = plot_df[metric].astype(float)
 
 
     if plot_df.empty: print(f"No valid data remains for metric '{metric}' after filtering."); return
 
-    # Determine order for hue and x_group
     hue_order = sorted(plot_df[group_hue].unique())
     x_group_order = sorted(plot_df[x_group].unique()) if x_group else None
 
 
-    # --- Plotting ---
     plt.style.use('seaborn-v0_8-whitegrid')
-    plt.figure(figsize=(12, 7)) # Adjust figure size as needed
-
+    plt.figure(figsize=(12, 7)) 
     ax = sns.barplot(
         data=plot_df,
         x='Num Few Shot',
         y=plot_metric,
         hue=group_hue,
-        order=sorted(shots_to_compare), # Order x-axis
-        hue_order=hue_order, # Order colors
+        order=sorted(shots_to_compare),
+        hue_order=hue_order, 
         palette=palette,
-        errorbar=('ci', 95) # Use errorbar instead of ci
+        errorbar=('ci', 95) 
     )
 
-    # --- Customization ---
     if title is None:
         title = f"{y_label} vs. Num Few-Shot Examples by {group_hue}"
-        if x_group: title += f" and {x_group}" # Note: x_group isn't directly plotted by barplot hue/x
-
+        if x_group: title += f" and {x_group}"
     plt.title(title, fontsize=15)
     plt.xlabel("Number of Few-Shot Examples", fontsize=12)
     plt.ylabel(y_label, fontsize=12)
-    # ax.tick_params(axis='both', which='major', labelsize=10)
-
-    # Format y-axis as percentage if plotting Success Rate
-    # if metric == 'Success':
-    #      ax.yaxis.set_major_formatter(mtick.PercentFormatter(xmax=1.0))
 
     # Adjust legend position
     plt.legend(title=group_hue, bbox_to_anchor=(1.03, 1), loc='upper left')
-    plt.tight_layout(rect=[0, 0, 0.9, 1]) # Adjust layout for legend outside
-
+    plt.tight_layout(rect=[0, 0, 0.9, 1]) 
     plt.show()
 
 
@@ -347,7 +326,6 @@ def plot_iterations_histogram(df, title):
     plt.show()
 
 def print_summary_stats(df):
-    """Prints summary statistics grouped by strategy and condition with robust aggregation."""
     print("\n--- Summary Statistics ---")
 
     if df.empty:
@@ -411,14 +389,12 @@ def print_summary_stats(df):
     print("-" * 50)
 
 def plot_simlm_cot_error_ratio(df, model_col='LLM Model Name', strategy_col='Strategy', error_col='Error'):
-    """Plots the ratio of SimLM error to COT error for different models."""
     mean_errors = df.groupby([model_col, strategy_col])[error_col].mean().unstack()
 
     mean_errors.dropna(inplace=True)
 
     print(mean_errors.head(5))
 
-    #calc error ratio
     mean_errors['Error Ratio (SimLM/CoT)'] = mean_errors['SimLM'] / mean_errors['Baseline CoT']
 
     plt.figure(figsize=(10, 6))
@@ -432,7 +408,6 @@ def plot_simlm_cot_error_ratio(df, model_col='LLM Model Name', strategy_col='Str
     plt.show()
 
 def plot_error_ratio_by_ground(df, model_col='LLM Model Name', strategy_col='Strategy', error_col='Error', ground_col='Ground Type'):
-    """Plots the ratio of SimLM error to CoT error across different LLM models and ground types."""
     
     mean_errors = df.groupby([model_col, strategy_col, ground_col])[error_col].mean().unstack(level=strategy_col)
     

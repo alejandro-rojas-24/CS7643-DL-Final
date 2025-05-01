@@ -8,10 +8,6 @@ Based off of the paper [SimLM: Can Language Models Infer Parameters of Physical 
 
 This project explores the capabilities of language models in understanding and inferring parameters of physical systems. We implement physics simulations using Pymunk to generate training data and test the ability of language models to predict physical parameters from system descriptions.
 
-## Project Structure
-
-Need to update
-
 ## Core Functionality
 
 * **Physics Simulation:** Accurate 2D projectile simulation using Pymunk, including bounce detection and configurable ground geometry (flat, sinusoidal, interpolated).
@@ -26,32 +22,12 @@ All required Python packages are listed in `requirements.txt`.
 
 ## Setup
 
-1. **Clone the repository:**
+**Clone the repository:**
 
-    ```bash
-    git clone https://github.com/alejandro-rojas-24/CS7643-DL-Final.git
-    cd simlm_project
-    ```
-
-2. **Create a virtual environment (recommended):**
-
-    ```bash
-    python -m venv venv
-    source venv/bin/activate  # On Windows use `venv\Scripts\activate`
-    ```
-
-3. **Install dependencies:**
-
-    ```bash
-    pip install -r requirements.txt
-    ```
-
-4. **Configure LLMs:**
-    * **OpenAI:** Set your API key in `config.py` (variable `OPENAI_API_KEY`) or as an environment variable `OPENAI_API_KEY`.
-    * **Ollama:**
-        * Ensure you have Ollama installed and running ([ollama.com](https://ollama.com/)).
-        * Pull the desired models (e.g., `ollama pull llama3`, `ollama pull mistral`).
-        * Verify the `OLLAMA_BASE_URL` in `config.py` matches your Ollama server address (default is `http://localhost:11434`).
+```bash
+git clone https://github.com/alejandro-rojas-24/CS7643-DL-Final.git
+cd CS7643-DL-Final
+```
 
 ## Usage
 
@@ -217,29 +193,73 @@ from OpenAI.
 
 ## Configuration
 
-Project settings and experiment parameters are managed through a configuration file (e.g., `config.yaml`). This allows for easy modification of settings without changing the core Python code.
+Project settings and experiment parameters are managed through the `config.yml` configuration file. This hierarchical YAML format allows for easy modification of settings without changing the core Python code.
 
-Modify the values in `config.yaml` (or your chosen configuration file) to control various aspects of the simulation and experiments:
+Modify the values in `config.yml` to control various aspects of the simulation and experiments:
 
-* **Experiment Setup:** Defines the specific scenario being run.
-  * `experiment`: Selects the ground type ("flat", "sine", "interpolated").
-  * `target_distance`, `target_bounce_number`, `target_tolerance`: Defines the objective for the projectile.
-  * `max_iterations`: Maximum refinement steps for the SimLM strategy.
-  * `few_shot_examples_path`: Path to optional few-shot examples file.
+*   **`experiment`**: Defines the overall experiment setup.
+    *   `type`: Selects the prompting strategy to run.
+        *   *Options:* `"baseline_cot"`, `"simlm"`
+    *   `visualize`: Boolean flag (`true`/`false`) to enable plotting the final trajectory after a successful run.
+    *   `save`: Boolean flag (`true`/`false`) to enable saving detailed run results to a JSON Lines file.
+    *   `few_shot_examples_path`: Path to an optional JSON Lines file containing examples for few-shot prompting.
+    *   `target_distance`: The target x-coordinate (in meters) for the specified bounce.
+    *   `target_bounce_number`: Which bounce number should land near the target distance (e.g., `3` for the third bounce).
+    *   `tolerance`: The acceptable error margin (in meters) around the `target_distance` for a run to be considered successful.
+    *   `max_iterations`: Maximum number of refinement steps (LLM reasoning -> Simulation -> LLM critique cycles) for the `simlm` strategy.
 
-* **LLM Selection:** Configures the language model to be used.
-  * `model`: Specifies the model identifier (e.g., "gpt-3.5-turbo", "ollama/llama3").
-  * `temperature`: Controls the randomness of the LLM's output.
+*   **`simulation`**: Core physics engine settings.
+    *   `fps`: Simulation frames per second (higher values increase accuracy but slow down simulation).
+    *   `max_duration`: Maximum simulation time (in seconds) allowed per attempt before timing out (e.g., if the target bounce isn't reached).
+    *   `gravity`: Defines gravitational acceleration.
+        *   `y`: Acceleration in the y-direction (typically negative, e.g., `-9.81` m/s²).
 
-* **Simulation Parameters:** Core physics engine settings.
-  * `fps`: Simulation frames per second (influences accuracy).
-  * `gravity_y`: Acceleration due to gravity.
-  * `max_duration`: Maximum simulation time if the target bounces aren't reached.
-  * `elasticity`, `mass`, `radius`: Physical properties of the projectile.
+*   **`projectile`**: Physical properties of the simulated projectile.
+    *   `elasticity`: Coefficient of restitution (bounciness) when colliding with the ground (0=inelastic, 1=perfectly elastic).
+    *   `mass`: Mass of the projectile (in kg).
+    *   `radius`: Radius of the projectile (in meters).
 
-* **Ground Generation:** Parameters defining the terrain.
-  * `x_min`, `x_max`, `step`: Defines the range and resolution for creating ground segments.
-  * `friction`: Friction coefficient of the ground surface.
-  * `amplitude`, `frequency`: Parameters for sinusoidal ground types (e.g., 'sine' experiment).
-  * `difficulty`: Interpolation factor for the 'interpolated' ground experiment (0=easy, 1=hard).
+*   **`ground`**: Parameters defining the terrain the projectile bounces on.
+    *   `type`: Selects the type of ground geometry.
+        *   *Options:* `"flat"`, `"sine"`, `"interpolated"`
+    *   `friction`: Friction coefficient of the ground surface.
+    *   `x_min`, `x_max`: The range of x-coordinates (in meters) over which the ground geometry is generated.
+    *   `step`: The resolution (in meters) used to create the piecewise linear segments representing the ground.
+    *   `amplitude`, `frequency`: Parameters used when `ground.type` is `"sine"`. Defines the amplitude and frequency of the `y = amplitude * sin(frequency * x)` function.
+    *   `difficulty`: A factor between 0 and 1 used only when `ground.type` is `"interpolated"`. It linearly interpolates between the `easy` and `hard` ground functions (`(1-difficulty)*easy + difficulty*hard`).
+    *   `easy`: Parameters defining the "easy" surface for interpolation.
+        *   `amplitude`, `frequency`: Parameters for the easy sinusoid.
+    *   `hard`: Parameters defining the "hard" surface for interpolation (sum of sinusoids).
+        *   `amplitudes`: A list of amplitudes for each component sinusoid.
+        *   `frequencies`: A list of frequencies for each component sinusoid.
 
+*   **`llm`**: Configuration for the Language Model interaction.
+    *   `service`: Specifies which LLM provider API to use.
+        *   *Options:* `"google"`, `"ollama"`, `"openai"`
+    *   `model_name`: The specific identifier for the model within the selected service (e.g., `"gemini-2.0-flash-lite"`, `"llama3.2:3b"`, `"gpt-4.1-nano"`). Ensure this model is available/supported by the chosen service.
+    *   `temperature`: Controls the randomness of the LLM's output (0=deterministic, higher values=more random). Typically ranges from 0.0 to 1.0.
+## Analysis Pipeline
+
+Once experiments are run using `main.py` or `batch.ipynb`, the results (typically saved to a JSON Lines file like `results/experiment_results.jsonl` if enabled) need to be processed to evaluate the performance of different models and prompting strategies. The typical analysis pipeline involves the following steps:
+
+1.  **Data Loading:** Read the generated JSON Lines file(s) containing the detailed results from each experimental run (e.g., using Python libraries like `pandas` or the standard `json` library). Each line represents one complete run (either CoT or SimLM for a specific setup).
+2.  **Data Cleaning & Preparation:**
+    *   Filter out any failed runs (e.g., where the LLM failed to produce valid JSON or the simulation timed out without reaching the target bounce).
+    *   Parse relevant fields like the final error, predicted parameters (h, v), number of iterations (for SimLM), ground type, model used, and strategy.
+3.  **Aggregation & Grouping:** Group the cleaned data based on the factors being compared:
+    *   Experiment Type (A: Flat, B: Sine, C: Interpolated)
+    *   Ground Difficulty (for Experiment C)
+    *   LLM Model Identifier
+    *   Prompting Strategy (CoT, SimLM)
+    *   Number of Few-Shot Examples (if implemented and varied)
+4.  **Metric Calculation:** For each group, calculate key performance metrics:
+    *   **Mean Absolute Error (MAE):** The average absolute difference between the achieved distance of the target bounce (e.g., 3rd bounce) and the target distance (e.g., 50m). This is the primary metric used in the SimLM paper.
+    *   **Success Rate:** The percentage of runs within each group where the final error was less than or equal to the defined tolerance (e.g., 1.0m).
+    *   **Relative Error (for comparing strategies):** For specific comparisons (like SimLM vs. CoT on Experiment C), calculate the ratio of MAE (e.g., `MAE_SimLM / MAE_CoT`). Values less than 1 indicate SimLM performed better.
+    *   **Average Iterations (for SimLM):** Calculate the mean number of iterations SimLM took to converge or reach the maximum limit.
+5.  **Statistical Significance (Optional):** Use statistical tests (e.g., two-sample t-tests, as mentioned in the paper) to determine if observed differences in MAE or success rates between groups (e.g., SimLM 1-shot vs CoT 1-shot on Experiment B) are statistically significant.
+6.  **Visualization:** Generate plots to visually represent the findings, similar to those in the SimLM paper:
+    *   Bar charts comparing MAE across models, strategies, and few-shot counts (e.g., Figures 1 & 4 in the paper).
+    *   Line or bar plots showing how MAE or relative error changes with increasing ground difficulty in Experiment C (e.g., Figure 3).
+
+This pipeline allows for systematic comparison and evaluation of how well different language models, augmented with simulation capabilities (SimLM) or not (CoT), can infer parameters for physical systems under varying conditions. Tools like `pandas`, `numpy`, `scipy.stats`, `matplotlib`, and `seaborn` are commonly used for these tasks.

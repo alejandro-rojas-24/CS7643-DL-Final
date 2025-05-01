@@ -30,7 +30,6 @@ def run_experiment(config: Config) -> tuple[SimLMRunner, dict]:
     runner = SimLMRunner(config)
     experiment_type = config.experiment.type
 
-    # Adding examples - still testing 
     if config.experiment.few_shot > 0:
         examples = load_examples(
             config.experiment.few_shot_examples_path,
